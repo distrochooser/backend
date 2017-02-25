@@ -9,3 +9,5 @@ version = "*"
 [dependencies]
 router = "*"
 hyper = "*"
+mysql = "*"
+rustc-serialize = "*"

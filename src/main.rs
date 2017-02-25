@@ -3,6 +3,8 @@ extern crate router;
 extern crate hyper;
 extern crate params;
 extern crate rustc_serialize;
+
+#[macro_use]
 extern crate mysql;
 
 use iron::prelude::*;
@@ -11,8 +13,8 @@ use hyper::header::{ContentType};
 use iron::status;
 use iron::TypeMap;
 use rustc_serialize::json;
-use mysql::Pool;
 use params::{Params, Value};
+use mysql::Pool;
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
@@ -60,7 +62,8 @@ fn language(request: &mut Request){
 }
 fn get_distros(pool: Pool) -> Vec<Distro>{
     let distros: Vec<Distro> =
-    pool.prep_exec("SELECT Id as id,Name as name  from phisco_ldc2.Distribution", ())
+   // pool.prep_exec("SELECT Id as id,Name as name  from phisco_ldc2.Distribution where Id = :id", params!{"id" => 2})
+   pool.prep_exec("SELECT Id as id,Name as name  from phisco_ldc2.Distribution",())
     .map(|result| { 
         result.map(|x| x.unwrap()).map(|row| {
             let (id, name) = mysql::from_row(row);

@@ -37,7 +37,7 @@ fn connect_database() -> Pool{
 fn middleware(request: &mut Request){
     let target: String = format!("{:?}",request.url.path()[0]).replace("\"","");
     let client = request.remote_addr.ip(); //TODO: Censor IP
-    if (DEBUG){
+    if DEBUG{
         println!("Serving.. /{} for {:?}",target,client);
     }
     language(request);
@@ -62,13 +62,12 @@ fn get_distros(pool: Pool) -> Vec<Distro>{
     unsafe {
         let query: String = format!("Select d.Id as id ,d.Name as name,d.Homepage as homepage,d.Image as image, (
         Select dd.Description as description from phisco_ldc2.dictDistribution dd where  dd.DistributionId = d.Id and dd.LanguageId = {} limit 1
-        ) as description,d.ImageSource as imagesource,d.TextSource as textsource,d.ColorCode as colorcode,d.Characteristica  as tags from  phisco_ldc2.Distribution d",LANG); 
-        let distros: Vec<Distro> = pool.prep_exec(query,())
-        .map(|result| { 
-            result.map(|x| x.unwrap()).map(|row| {
-                let (id, name, homepage, image, description, imagesource, textsource, colorcode) = mysql::from_row(row);
-                let tags = json::decode(mysql::from_row(row)).unwrap();
-                Distro {
+        ) as description,d.ImageSource as imagesource,d.TextSource as textsource,d.ColorCode as colorcode,d.Characteristica  as characteristica from  phisco_ldc2.Distribution d",LANG); 
+       let mut distros: Vec<Distro> = Vec::new();
+       pool.prep_exec(query,()).map(|mut result| {
+            let row = result.next().unwrap().unwrap();
+            let (id, name, homepage, image, description, imagesource, textsource, colorcode,characteristica) = mysql::from_row(row);
+            let mut d = Distro{
                     id: id,
                     name:name,
                     description: description,
@@ -77,11 +76,13 @@ fn get_distros(pool: Pool) -> Vec<Distro>{
                     imagesource: imagesource,
                     textsource: textsource,
                     colorcode: colorcode,
-                    tags:  tags
-                }
-            }).collect()
-        }).unwrap();
-        return distros;
+                    characteristica: characteristica,
+                    tags:  Vec::new()
+            };
+            d.tags = Distro::get_tags(d.characteristica);
+            distros.push(d);
+       }).unwrap();
+       return distros;
     }
 }
 
@@ -89,8 +90,8 @@ fn get_distros(pool: Pool) -> Vec<Distro>{
 fn get_distro(pool: Pool, id: i32) -> APIResult{
     let distros: Vec<Distro> = get_distros(pool);
     for distro in distros{
-        if (distro.id == id){
-            return Ok(distro);
+        if distro.id == id{
+            return Ok(distro)
         }
     }
     return Err(APIError::DistroNotFound)
@@ -112,17 +113,23 @@ fn distributions(_request: &mut Request) -> IronResult<Response> {
 }
 fn distribution(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
-    let raw = get_distro(connect_database(),_request.extensions.get::<Router>().unwrap().find("id").unwrap().parse::<i32>().unwrap());
+    let id: i32 = _request.extensions.get::<Router>().unwrap().find("id").unwrap().parse::<i32>().unwrap();
+    let raw = get_distro(connect_database(),id);
     let mut distro: Option<Distro> = None;
     match raw{
         Ok(n) => distro = Some(n),
         Err(_) => distro = None
     };
     let mut resp;
-    if (distro.is_none()){
-        resp = Response::with((status::NotFound));
-    }else{
+    if distro.is_none(){
         let encoded = json::encode(&distro).unwrap();
+        if DEBUG{
+            println!("Distro {:?} not found!",id);
+        }
+        resp = Response::with((status::NotFound,encoded));
+    }else{
+        let mut d: Distro = distro.unwrap();
+        let encoded = json::encode(&d).unwrap();
         resp = Response::with((status::Ok, encoded));
         resp.headers.set(ContentType::json());
     }
@@ -141,7 +148,15 @@ pub struct Distro {
     imagesource: String,
     textsource: String,
     colorcode: String,
+    characteristica: String,
     tags: Vec<String>
+}
+
+impl Distro{
+    fn get_tags(s: String) -> Vec<String> {
+        let v: Vec<String> = json::decode(&s).unwrap();
+        return v;
+    }
 }
 
 /**

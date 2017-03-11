@@ -1,5 +1,6 @@
 extern crate iron;
 extern crate router;
+#[macro_use]
 extern crate hyper;
 extern crate params;
 extern crate rustc_serialize;
@@ -17,6 +18,7 @@ use std::str;
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
+header! { (Server, "Server") => [String] }
 static DEBUG: bool = true;
 static mut LANG: i32 = 1;
 fn main() {
@@ -79,7 +81,7 @@ fn get_distros(pool: Pool) -> Vec<Distro>{
                     characteristica: characteristica,
                     tags:  Vec::new()
             };
-            d.tags = Distro::get_tags(d.characteristica);
+            d.tags = d.get_tags();
             distros.push(d);
        }).unwrap();
        return distros;
@@ -126,12 +128,12 @@ fn distribution(_request: &mut Request) -> IronResult<Response> {
         if DEBUG{
             println!("Distro {:?} not found!",id);
         }
-        resp = Response::with((status::NotFound,encoded));
+        resp = Response::with((status::NotFound,"Not found"));
     }else{
-        let mut d: Distro = distro.unwrap();
-        let encoded = json::encode(&d).unwrap();
+        let encoded = json::encode(&distro).unwrap();
         resp = Response::with((status::Ok, encoded));
         resp.headers.set(ContentType::json());
+        resp.headers.set(Server(format!("{} {}",NAME,VERSION).to_owned()));
     }
     return Ok(resp);
 }
@@ -153,8 +155,8 @@ pub struct Distro {
 }
 
 impl Distro{
-    fn get_tags(s: String) -> Vec<String> {
-        let v: Vec<String> = json::decode(&s).unwrap();
+    fn get_tags(&self) -> Vec<String> {
+        let v: Vec<String> = json::decode(&self.characteristica).unwrap();
         return v;
     }
 }

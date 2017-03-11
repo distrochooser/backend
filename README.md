@@ -14,4 +14,7 @@ This repository contains an experimental implementation of the distrochooser.de-
 
 ## Usage
 
-`rusty_distrochooser /pfad/to/db.conf`
+`rusty_distrochooser /path/to/db.conf`
+
+db.conf:
+mysql://$username:$passord@$host

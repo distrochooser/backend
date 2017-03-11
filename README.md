@@ -2,5 +2,5 @@
 
 ## Routes
 
-- [x] /getdistributions/:lang/
-- [x] /getdistribution/:id/:lang/
+- [x] /distributions/:lang/
+- [x] /distribution/:id/:lang/

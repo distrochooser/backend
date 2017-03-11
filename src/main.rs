@@ -7,7 +7,8 @@ extern crate rustc_serialize;
 
 #[macro_use]
 extern crate mysql;
-
+use std::io::prelude::*;
+use std::fs::File;
 use iron::prelude::*;
 use router::Router;
 use hyper::header::{ContentType};
@@ -15,6 +16,7 @@ use iron::status;
 use rustc_serialize::json;
 use mysql::Pool;
 use std::str;
+use std::env;
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
@@ -33,8 +35,16 @@ fn main() {
 * Helpers
 */
 fn connect_database() -> Pool{
-   let pool = Pool::new("mysql://root:foobarbarz@localhost").unwrap();
-   return pool;
+    if let Some(arg1) = env::args().nth(1) {
+        println!("{}",arg1);
+        let mut f = File::open(arg1).unwrap(); 
+        let mut data = String::new();
+        f.read_to_string(&mut data);
+        let pool = Pool::new(data.as_str()).unwrap();
+        return pool;
+    }else{
+        return Pool::new("").unwrap();
+    }
 }
 fn middleware(request: &mut Request){
     let target: String = format!("{:?}",request.url.path()[0]).replace("\"","");

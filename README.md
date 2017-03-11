@@ -11,3 +11,7 @@ This repository contains an experimental implementation of the distrochooser.de-
 - [ ] /answer/:id/:lang/
 - [ ] /newvisitor/:lang/
 - [ ] /addresult/:lang/
+
+## Usage
+
+`rusty_distrochooser /pfad/to/db.conf`

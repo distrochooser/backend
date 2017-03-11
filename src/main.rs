@@ -130,7 +130,7 @@ fn distribution(_request: &mut Request) -> IronResult<Response> {
         Ok(n) => distro = Some(n),
         Err(_) => distro = None
     };
-    let mut resp;
+    let resp;
     if distro.is_none(){
         resp = Response::with((status::NotFound,"Not found"));
     }else{

@@ -4,7 +4,7 @@ extern crate router;
 extern crate hyper;
 extern crate params;
 extern crate rustc_serialize;
-extern crate crypto;
+extern crate time;
 #[macro_use]
 extern crate mysql;
 use std::io::prelude::*;
@@ -18,14 +18,11 @@ use mysql::Pool;
 use std::str;
 use std::env;
 use std::collections::HashMap;
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
 use hyper::header::HeaderFormat;
 use std::fmt;
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
 header! { (Server, "Server") => [String] }
-static DEBUG: bool = true;
 static mut LANG: i32 = 1;
 fn main() {
     println!("Starting {} {}...",NAME, VERSION);
@@ -35,6 +32,7 @@ fn main() {
     router.get("/distribution/:id/:lang/", distribution,"distro"); 
     router.get("/questions/:lang/", questions,"questions"); 
     router.get("/i18n/:lang/", i18n,"i18n"); 
+    router.get("/newvisitor/", newvisitor,"newvisitor"); 
     Iron::new(router).http("localhost:3000").unwrap();
 }
 /**
@@ -42,7 +40,6 @@ fn main() {
 */
 fn connect_database() -> Pool{
     if let Some(arg1) = env::args().nth(1) {
-        println!("{}",arg1);
         let mut f = File::open(arg1).unwrap(); 
         let mut data = String::new();
         f.read_to_string(&mut data);
@@ -55,11 +52,7 @@ fn connect_database() -> Pool{
 fn middleware(request: &mut Request){
     let target: String = format!("{:?}",request.url.path()[0]).replace("\"","");
     let client = request.remote_addr.ip(); //TODO: Censor IP
-    if DEBUG{
-        println!("Serving.. /{} for {:?}",target,client);
-    }
     language(request);
-    new_visitor(connect_database(),request);
 }
 fn language(request: &mut Request){
     let ref lang:&str = request.extensions.get::<Router>().unwrap().find("lang").unwrap_or("/");
@@ -204,21 +197,33 @@ fn get_response(body: String) -> Response{
     return resp;
 }
 
-fn new_visitor(p: Pool,request: &mut Request){
-    let mut useragent: String = format!("{:?}",request.headers.get::<iron::headers::UserAgent>().unwrap());
-    let mut referer: String = format!("{:?}",request.headers.get::<iron::headers::Referer>());
-    //let dnt: String = format!("{:?}",request.headers.get::<iron::headers::Dnt>());
-    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT) VALUES ('2015-08-15 20:08:51',:ref,:ua,:dnt)");
-    match referer.as_ref()  {
-        "None" => referer =  String::new(),
-        _ => referer = referer
-    };
-    match useragent.as_ref()  {
-        "None" => referer =  String::new(),
-        _ => useragent = useragent
-    };
-    //TODO: correctly extract header values
-    //p.prep_exec(query,(referer ,useragent,true)).unwrap();
+fn new_visitor(p: Pool,request: &mut Request) -> i32{
+    let mut useragent: String = String::new();
+    let mut referer: String = String::new();
+    match  request.headers.get::<iron::headers::UserAgent>() {
+        Some(x) => useragent = format!("{}",x),
+        None    => useragent = String::new(),
+    }
+    match  request.headers.get::<iron::headers::Referer>() {
+        Some(x) => referer = format!("{}",x),
+        None    => referer = String::new(),
+    }
+    let tm = time::now();
+    let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
+    //TODO: DNT
+    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT) VALUES (:time,:ref,:ua,:dnt)");
+    p.prep_exec(query,(time,referer ,useragent,true)).unwrap();
+
+    //return visitor id
+    let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Visitor");
+    let mut id: i32 = 0;
+    let mut conn = p.get_conn().unwrap();
+    let result = conn.prep_exec(max_id,()).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        id = r.take("id").unwrap();
+    }
+    return id;
 }
 /**
 * Routes
@@ -226,6 +231,12 @@ fn new_visitor(p: Pool,request: &mut Request){
 fn index(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
     Ok(get_response(String::from("I'm an rusty API.")))
+}
+fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
+    middleware(_request);
+    let id: i32 = new_visitor(connect_database(),_request);
+    let body: String = format!("{}",id);
+    Ok(get_response(body))
 }
 fn distributions(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);

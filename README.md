@@ -12,7 +12,7 @@ It is an experiment. It's slow and I do not know Rust at all.
 - [x] /distribution/:id/:lang/
 - [x] /questions/:lang/
 - [x] /i18n/:lang/
-- [ ] /newvisitor/:lang/
+- [x] /newvisitor/
 - [ ] /addresult/:lang/
 
 ## Usage

@@ -33,6 +33,7 @@ fn main() {
     router.get("/questions/:lang/", questions,"questions"); 
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
+    router.get("/get/:lang/", get,"get"); 
     Iron::new(router).http("localhost:3000").unwrap();
 }
 /**
@@ -61,7 +62,6 @@ fn language(request: &mut Request){
             "de" => LANG = 1,
             _ => LANG = 2,
         }
-        println!("Choosing language key {:?} for this request.",LANG);
     }
     /*
     let get =  request.get_ref::<Params>();
@@ -232,6 +232,16 @@ fn index(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     Ok(get_response(String::from("I'm an rusty API.")))
 }
+fn get(_request: &mut Request) -> IronResult<Response>{
+    middleware(_request);
+    let mut result: get = get{
+        questions: get_questions(connect_database()),
+        distros: get_distros(connect_database()),
+        i18n: get_i18n(connect_database()),
+        visitor: new_visitor(connect_database(),_request)
+    };
+    Ok(get_response(String::from(json::encode(&result).unwrap())))
+}
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
     let id: i32 = new_visitor(connect_database(),_request);
@@ -322,6 +332,14 @@ struct i18nValue{
     val: String
 }
 
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct get{
+    distros: Vec<Distro>,
+    questions: Vec<Question>,
+    i18n: HashMap<String,i18nValue>,
+    visitor: i32
+}
 
 impl i18nValue {
     fn new(t: String, v: String) -> i18nValue {

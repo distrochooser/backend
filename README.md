@@ -13,11 +13,16 @@ It is an experiment. It's slow and I do not know Rust at all.
 - [x] /questions/:lang/
 - [x] /i18n/:lang/
 - [x] /newvisitor/
+- [x] /get/:lang/ (combines /distributions /questions /i18n and /newvisitor)
 - [ ] /addresult/:lang/
+
+## Build
+
+`cargo run /path/to/db.conf`
 
 ## Usage
 
 `rusty_distrochooser /path/to/db.conf`
 
 db.conf:
-mysql://$username:$passord@$host
+mysql://$username:$password@$host

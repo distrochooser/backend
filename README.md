@@ -9,6 +9,8 @@ It is an experiment. It's slow and I do not know Rust at all.
 - uses `unsafe` (is a flaw?)
 - no central database connection.. always calling `connect_database`
 - is kinda slow
+- throws a lot warnings 
+- code is not clean
 
 ## Routes
 

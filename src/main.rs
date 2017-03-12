@@ -110,7 +110,7 @@ fn get_questions(pool: Pool) -> Vec<Question>{
         let mut questions: Vec<Question> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
-        let mut i:f32 = 0.0;
+        let mut i:i32 = 1;
         for row in result {
            let mut r = row.unwrap();
            let mut id: i32 = r.take("id").unwrap();
@@ -125,7 +125,7 @@ fn get_questions(pool: Pool) -> Vec<Question>{
                 text: r.take("text").unwrap()
            };
            questions.push(q);
-           i +=1.0;
+           i +=1;
         }
         return questions;
     }
@@ -310,7 +310,7 @@ struct Question{
     help: String,
     id: i32,
     important: bool,
-    number: f32,
+    number: i32,
     singleanswer: bool,
     text: String
 }

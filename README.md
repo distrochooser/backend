@@ -6,6 +6,10 @@ This repository contains an experimental implementation of the distrochooser.de-
 
 It is an experiment. It's slow and I do not know Rust at all.
 
+- uses `unsafe` (is a flaw?)
+- no central database connection.. always calling `connect_database`
+- is kinda slow
+
 ## Routes
 
 - [x] /distributions/:lang/

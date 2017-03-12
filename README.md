@@ -2,13 +2,16 @@
 
 This repository contains an experimental implementation of the distrochooser.de-backend. 
 
+## Flaws
+
+It is an experiment. It's slow and I do not know Rust at all.
+
 ## Routes
 
 - [x] /distributions/:lang/
 - [x] /distribution/:id/:lang/
-- [ ] /questions/:lang/
-- [ ] /question/:id/:lang/
-- [ ] /answer/:id/:lang/
+- [x] /questions/:lang/
+- [x] /i18n/:lang/
 - [ ] /newvisitor/:lang/
 - [ ] /addresult/:lang/
 

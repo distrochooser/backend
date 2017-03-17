@@ -34,6 +34,7 @@ fn main() {
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.get("/get/:lang/", get,"get"); 
+    router.post("/newresult/:lang/",newresult,"newresult");
     Iron::new(router).http("localhost:3000").unwrap();
 }
 /**
@@ -248,6 +249,29 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
     let body: String = format!("{}",id);
     Ok(get_response(body))
 }
+fn newresult(_request: &mut Request) -> IronResult<Response> {    
+    middleware(_request);
+   // let id: i32 = new_visitor(connect_database(),_request);
+  // "["+JSON.stringify(this.rawDistros)+","+JSON.stringify(this.currentTags)+","+JSON.stringify(answers)+","+JSON.stringify(important) +"]"
+
+    let params = _request.get_ref::<params::Params>().unwrap();
+    let distro: String = format!("{:?}",params["distros"]);
+    let mut tag_json: String = format!("{:?}",params["tags"]);
+    tag_json = String::from(tag_json.trim_matches('"').replace("\\",""));
+    let tags = rustc_serialize::json::Json::from_str(&tag_json).unwrap();
+    let tagsObj = tags.as_object().unwrap();
+    /*for (key, value) in obj.iter() {
+        println!("{}: {}", key, value);
+    }
+    */
+
+    let distros: Vec<Distro> = json::decode(&distro).unwrap();
+   // println!("data: {}", tags);
+    let answers: String = format!("{:?}",params["answers"]);
+    let important: String = format!("{:?}",params["important"]); 
+    Ok(get_response(format!("{:?}",distros[0].name)))
+}
+
 fn distributions(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let distros: Vec<Distro> = get_distros(connect_database());

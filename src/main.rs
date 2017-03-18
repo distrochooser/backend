@@ -24,6 +24,10 @@ static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
 header! { (Server, "Server") => [String] }
 static mut LANG: i32 = 1;
+
+
+
+
 fn main() {
     println!("Starting {} {}...",NAME, VERSION);
     let mut router = Router::new();
@@ -235,7 +239,8 @@ fn index(_request: &mut Request) -> IronResult<Response> {
 }
 fn get(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let mut result: get = get{
+    let pool: Pool = connect_database();
+    let result: get = get{
         questions: get_questions(connect_database()),
         distros: get_distros(connect_database()),
         i18n: get_i18n(connect_database()),
@@ -251,30 +256,14 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
 }
 fn newresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
-   
-    /**
-    * Parse distributions
-    */
 
-   // 
-    /**
-    * Parse tags
-    */
    // let tags = rustc_serialize::json::Json::from_str(&tags_json).unwrap();
    // let tagsObj = tags.as_object().unwrap();
     /*for (key, value) in obj.iter() {
         println!("{}: {}", key, value);
     }
     */
-    /**
-    * Parse answers
-    */
-   
    // let answers: Vec<String> = json::decode(&answers_json).unwrap();
-    /**
-    * Parse important flag
-    */
-   
     //let important: Vec<String> = json::decode(&important_json).unwrap();
 
     let mut useragent: String = String::new();
@@ -296,9 +285,7 @@ fn newresult(_request: &mut Request) -> IronResult<Response> {
     let mut important_json: String = format!("{:?}",params["important"]); 
     important_json = String::from(important_json.trim_matches('"').replace("\\",""));
 
-    let tm = time::now();
-    let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
-    let mut p: Pool = connect_database();
+    let p: Pool = connect_database();
     let query: String = String::from("Insert into phisco_ldc3.Result (Date,UserAgent,Tags, Answers,Important) Values(CURRENT_TIMESTAMP,:ua,:tags,:answers,:important)");
     p.prep_exec(query,(useragent,tags_json,answers_json,important_json)).unwrap();
 
@@ -315,8 +302,8 @@ fn newresult(_request: &mut Request) -> IronResult<Response> {
     let distros: Vec<Distro> = json::decode(&distro_json).unwrap();
 
     for distro in distros{
-        let addResult: String = String::from("Insert into phisco_ldc3.ResultDistro (DistroId,ResultId) Values(:distro,:result)");
-        p.prep_exec(addResult,(distro.id,id)).unwrap();
+        let add_result: String = String::from("Insert into phisco_ldc3.ResultDistro (DistroId,ResultId) Values(:distro,:result)");
+        p.prep_exec(add_result,(distro.id,id)).unwrap();
     }
 
     Ok(get_response(format!("{:?}",id)))

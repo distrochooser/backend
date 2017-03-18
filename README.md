@@ -11,6 +11,7 @@ It is an experiment. It's slow and I do not know Rust at all.
 - is kinda slow
 - throws a lot warnings 
 - code is not clean
+- no error handling, threads crash hard causing `HTTP 500`
 
 ## Routes
 
@@ -20,7 +21,7 @@ It is an experiment. It's slow and I do not know Rust at all.
 - [x] /i18n/:lang/
 - [x] /newvisitor/
 - [x] /get/:lang/ (combines /distributions /questions /i18n and /newvisitor)
-- [ ] /addresult/:lang/
+- [x] /addresult/
 
 ## Build
 

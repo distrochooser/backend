@@ -34,7 +34,7 @@ fn main() {
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.get("/get/:lang/", get,"get"); 
-    router.post("/newresult/:lang/",newresult,"newresult");
+    router.post("/newresult/",newresult,"newresult");
     Iron::new(router).http("localhost:3000").unwrap();
 }
 /**
@@ -251,25 +251,75 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
 }
 fn newresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
-   // let id: i32 = new_visitor(connect_database(),_request);
-  // "["+JSON.stringify(this.rawDistros)+","+JSON.stringify(this.currentTags)+","+JSON.stringify(answers)+","+JSON.stringify(important) +"]"
+   
+    /**
+    * Parse distributions
+    */
 
-    let params = _request.get_ref::<params::Params>().unwrap();
-    let distro: String = format!("{:?}",params["distros"]);
-    let mut tag_json: String = format!("{:?}",params["tags"]);
-    tag_json = String::from(tag_json.trim_matches('"').replace("\\",""));
-    let tags = rustc_serialize::json::Json::from_str(&tag_json).unwrap();
-    let tagsObj = tags.as_object().unwrap();
+   // 
+    /**
+    * Parse tags
+    */
+   // let tags = rustc_serialize::json::Json::from_str(&tags_json).unwrap();
+   // let tagsObj = tags.as_object().unwrap();
     /*for (key, value) in obj.iter() {
         println!("{}: {}", key, value);
     }
     */
+    /**
+    * Parse answers
+    */
+   
+   // let answers: Vec<String> = json::decode(&answers_json).unwrap();
+    /**
+    * Parse important flag
+    */
+   
+    //let important: Vec<String> = json::decode(&important_json).unwrap();
 
-    let distros: Vec<Distro> = json::decode(&distro).unwrap();
-   // println!("data: {}", tags);
-    let answers: String = format!("{:?}",params["answers"]);
-    let important: String = format!("{:?}",params["important"]); 
-    Ok(get_response(format!("{:?}",distros[0].name)))
+    let mut useragent: String = String::new();
+    match  _request.headers.get::<iron::headers::UserAgent>() {
+        Some(x) => useragent = format!("{}",x),
+        None    => useragent = String::new(),
+    }
+
+    let params = _request.get_ref::<params::Params>().unwrap();
+    let mut distro_json: String = format!("{:?}",params["distros"]);
+    distro_json = String::from(distro_json.trim_matches('"').replace("\\",""));
+
+    let mut tags_json: String = format!("{:?}",params["tags"]);
+    tags_json = String::from(tags_json.trim_matches('"').replace("\\",""));
+
+    let mut answers_json: String = format!("{:?}",params["answers"]);
+    answers_json = String::from(answers_json.trim_matches('"').replace("\\",""));
+    
+    let mut important_json: String = format!("{:?}",params["important"]); 
+    important_json = String::from(important_json.trim_matches('"').replace("\\",""));
+
+    let tm = time::now();
+    let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
+    let mut p: Pool = connect_database();
+    let query: String = String::from("Insert into phisco_ldc3.Result (Date,UserAgent,Tags, Answers,Important) Values(CURRENT_TIMESTAMP,:ua,:tags,:answers,:important)");
+    p.prep_exec(query,(useragent,tags_json,answers_json,important_json)).unwrap();
+
+    //return result id
+    let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Result");
+    let mut id: i32 = 0;
+    let mut conn = p.get_conn().unwrap();
+    let result = conn.prep_exec(max_id,()).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        id = r.take("id").unwrap();
+    }
+
+    let distros: Vec<Distro> = json::decode(&distro_json).unwrap();
+
+    for distro in distros{
+        let addResult: String = String::from("Insert into phisco_ldc3.ResultDistro (DistroId,ResultId) Values(:distro,:result)");
+        p.prep_exec(addResult,(distro.id,id)).unwrap();
+    }
+
+    Ok(get_response(format!("{:?}",id)))
 }
 
 fn distributions(_request: &mut Request) -> IronResult<Response> {

@@ -39,6 +39,7 @@ fn main() {
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.get("/get/:lang/", get,"get"); 
     router.post("/newresult/",newresult,"newresult");
+    router.get("/getstats/",getstats,"getstats");
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -51,7 +52,8 @@ fn connect_database() -> Pool{
         f.read_to_string(&mut data);
         let pool = Pool::new(data.as_str()).unwrap();
         let mut conn = pool.get_conn().unwrap();
-        let result = conn.prep_exec("SET NAMES UTF8",()).unwrap();
+        conn.prep_exec("SET NAMES UTF8;",()).unwrap();
+        conn.prep_exec("SET sql_mode = '';",()).unwrap();
         return pool;
     }else{
         return Pool::new("").unwrap();
@@ -157,7 +159,7 @@ fn get_answers(id: i32) -> Vec<Answer>{
                 notags: json::decode(&notags).unwrap(),
                 tags: json::decode(&tags).unwrap(),
                 image: String::new(),
-                istext: r.take("istext").unwrap(),
+                istext: true,//r.take("istext").unwrap(),
                 selected: false
            };
            answers.push(a);
@@ -169,7 +171,7 @@ fn get_answers(id: i32) -> Vec<Answer>{
 fn get_i18n(p: Pool) -> HashMap<String,i18nValue>{
     unsafe {
         let mut pool: Pool = connect_database();
-        let query: String = format!("Select Text,Val,Val as Name from phisco_ldc3.dictSystem where LanguageId =  {}",LANG); 
+        let query: String = format!("Select Text,Val, Val as Name from phisco_ldc3.dictSystem where LanguageId =  {}",LANG); 
         let mut values = HashMap::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
@@ -255,6 +257,36 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
     let body: String = format!("{}",id);
     Ok(get_response(body))
 }
+
+fn getstats(_request: &mut Request) -> IronResult<Response> {
+    middleware(_request);
+    let max_id: String = String::from("SELECT 
+    COUNT( Id ) as results ,
+    DATE_FORMAT(DATE, '%d/%m') AS MONTH,
+    DATE_FORMAT(DATE, '%d/%m/%Y') AS FullDate,
+    (
+    Select count(Id) from phisco_ldc3.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = FullDate
+    ) as visitors
+    FROM phisco_ldc3.Result
+    WHERE YEAR( DATE ) = YEAR( CURDATE( ) )
+    and MONTH(DATE) = MONTH(CURDATE())
+    GROUP BY FullDate");
+    let mut p: Pool = connect_database();
+    let mut conn = p.get_conn().unwrap();
+    let result = conn.prep_exec(max_id,()).unwrap();
+    let mut stats: Vec<stat> = Vec::new();
+    for row in result {
+        let mut r = row.unwrap();
+        let mut s = stat{              
+            MONTH: r.take("MONTH").unwrap(),
+            count: r.take("visitors").unwrap(),
+            tests: r.take("results").unwrap(),
+        };
+        stats.push(s);        
+    }
+    Ok(get_response(String::from(json::encode(&stats).unwrap())))
+}
+
 fn newresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
 
@@ -390,10 +422,16 @@ struct Answer{
 
 #[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
 struct i18nValue{
-    text: String,
+    name: String,
     val: String
 }
 
+#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
+struct stat{
+    count: i32,
+    tests: i32,
+    MONTH: String
+}
 
 #[derive(RustcDecodable, RustcEncodable)]
 struct get{
@@ -404,8 +442,8 @@ struct get{
 }
 
 impl i18nValue {
-    fn new(t: String, v: String) -> i18nValue {
-        i18nValue { text: t.to_string(), val: v.to_string() }
+    fn new(n: String, v: String) -> i18nValue {
+        i18nValue { val: n.to_string(), name: v.to_string() }
     }
 }
 

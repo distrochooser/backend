@@ -22,6 +22,9 @@ It is an experiment. It's slow and I do not know Rust at all.
 - [x] /newvisitor/
 - [x] /get/:lang/ (combines /distributions /questions /i18n and /newvisitor)
 - [x] /addresult/
+- [ ] /getstats/
+- [ ] /lastratings/
+- [ ] /addrating/@lang
 
 ## Build
 

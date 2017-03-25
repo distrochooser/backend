@@ -39,7 +39,7 @@ fn main() {
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.get("/get/:lang/", get,"get"); 
     router.post("/newresult/",newresult,"newresult");
-    Iron::new(router).http("localhost:3000").unwrap();
+    Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
 * Helpers
@@ -50,6 +50,8 @@ fn connect_database() -> Pool{
         let mut data = String::new();
         f.read_to_string(&mut data);
         let pool = Pool::new(data.as_str()).unwrap();
+        let mut conn = pool.get_conn().unwrap();
+        let result = conn.prep_exec("SET NAMES UTF8",()).unwrap();
         return pool;
     }else{
         return Pool::new("").unwrap();

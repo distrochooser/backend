@@ -40,7 +40,7 @@ fn main() {
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.get("/get/:lang/", get,"get"); 
-    router.post("/newresult/",newresult,"newresult");
+    router.post("/addresult/",newresult,"newresult");
     router.get("/getstats/",getstats,"getstats");
     router.get("/getratings/:lang/", getratings,"getratings"); 
     router.post("/addrating/:lang/", addrating,"addrating"); 

@@ -224,7 +224,7 @@ fn new_visitor(p: Pool,request: &mut Request) -> i32{
     let tm = time::now();
     let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
     //TODO: DNT
-    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT) VALUES (:time,:ref,:ua,:dnt)");
+    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT, API) VALUES (:time,:ref,:ua,:dnt,'waldorf')");
     p.prep_exec(query,(time,referer ,useragent,true)).unwrap();
 
     //return visitor id

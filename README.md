@@ -12,6 +12,7 @@ It is an experiment. It's slow and I do not know Rust at all.
 - throws a lot warnings 
 - code is not clean
 - no error handling, threads crash hard causing `HTTP 500`
+- dirty workarounds
 
 ## Routes
 
@@ -23,8 +24,8 @@ It is an experiment. It's slow and I do not know Rust at all.
 - [x] /get/:lang/ (combines /distributions /questions /i18n and /newvisitor)
 - [x] /addresult/
 - [x] /getstats/
-- [ ] /lastratings/
-- [ ] /addrating/@lang
+- [x] /lastratings/
+- [x] /addrating/@lang
 
 ## Build
 

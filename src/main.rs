@@ -2,6 +2,8 @@ extern crate iron;
 extern crate router;
 #[macro_use]
 extern crate hyper;
+
+#[macro_use]
 extern crate params;
 extern crate rustc_serialize;
 extern crate time;
@@ -40,6 +42,8 @@ fn main() {
     router.get("/get/:lang/", get,"get"); 
     router.post("/newresult/",newresult,"newresult");
     router.get("/getstats/",getstats,"getstats");
+    router.get("/lastratings/:lang/", getratings,"getratings"); 
+    router.post("/addrating/:lang/", addrating,"addrating"); 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -287,6 +291,49 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
     Ok(get_response(String::from(json::encode(&stats).unwrap())))
 }
 
+fn getratings(_request: &mut Request) -> IronResult<Response> {
+    middleware(_request);
+    unsafe {
+        let query: String = format!("Select * from phisco_ldc3.Rating where Approved = 1 and Lang = {} and Test is not null order by ID desc limit 7",LANG); 
+        let mut ratings: Vec<rating> = Vec::new();
+        let mut pool: Pool = connect_database();
+        let mut conn = pool.get_conn().unwrap();
+        let result = conn.prep_exec(query,()).unwrap();
+        for row in result {
+            let mut r = row.unwrap();
+            let mut comment = rating{
+                    ID:  r.take("ID").unwrap(),
+                    Rating: r.take("Rating").unwrap(),
+                    UserAgent: r.take("UserAgent").unwrap(),
+                    Comment: r.take("Comment").unwrap(),
+                    Test: r.take("Test").unwrap()
+            };
+            ratings.push(comment);
+        }
+        Ok(get_response(String::from(json::encode(&ratings).unwrap())))
+    }
+}
+
+fn addrating(_request: &mut Request) -> IronResult<Response>{
+    middleware(_request);
+    unsafe {
+        let mut useragent: String = String::new();
+        match  _request.headers.get::<iron::headers::UserAgent>() {
+            Some(x) => useragent = format!("{}",x),
+            None    => useragent = String::new(),
+        }
+        let params = _request.get_ref::<params::Params>().unwrap();
+        let mut rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
+        let mut comment: String =  String::from(format!("{:?}",params["comment"]).replace('"',"").replace("\\",""));
+        let mut test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
+
+        let query: String = String::from("Insert into phisco_ldc3.Rating (Rating,Date,UserAgent,Comment,Test,Lang) Values (?,CURRENT_TIMESTAMP,?,?,?,?)");
+        let p: Pool = connect_database();
+        p.prep_exec(query,(rating,useragent ,comment,test,LANG)).unwrap();
+        Ok(get_response(format!("{}",rating)))
+    }
+}
+
 fn newresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
 
@@ -439,6 +486,16 @@ struct get{
     questions: Vec<Question>,
     i18n: HashMap<String,i18nValue>,
     visitor: i32
+}
+
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct rating{
+    ID: i32,
+    Rating: i32,
+    UserAgent: String,
+    Comment: String,
+    Test: i32
 }
 
 impl i18nValue {

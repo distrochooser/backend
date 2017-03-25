@@ -42,7 +42,7 @@ fn main() {
     router.get("/get/:lang/", get,"get"); 
     router.post("/newresult/",newresult,"newresult");
     router.get("/getstats/",getstats,"getstats");
-    router.get("/lastratings/:lang/", getratings,"getratings"); 
+    router.get("/getratings/:lang/", getratings,"getratings"); 
     router.post("/addrating/:lang/", addrating,"addrating"); 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }

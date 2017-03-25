@@ -22,7 +22,7 @@ use hyper::header::HeaderFormat;
 use std::fmt;
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
-header! { (Server, "Server") => [String] }
+header! { (Server, "X-LDC") => [String] }
 static mut LANG: i32 = 1;
 
 
@@ -239,7 +239,6 @@ fn index(_request: &mut Request) -> IronResult<Response> {
 }
 fn get(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let pool: Pool = connect_database();
     let result: get = get{
         questions: get_questions(connect_database()),
         distros: get_distros(connect_database()),

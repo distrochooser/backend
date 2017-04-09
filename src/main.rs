@@ -88,7 +88,7 @@ fn get_id(request: &mut Request) -> i32{
     return request.extensions.get::<Router>().unwrap().find("id").unwrap().parse::<i32>().unwrap();
 }
 
-fn get_distros(pool: Pool) -> Vec<Distro>{
+fn get_distros(pool: &Pool) -> Vec<Distro>{
     unsafe {
         let query: String = format!("Select d.Id as id ,d.Name as name,d.Homepage as homepage,d.Image as image, (
         Select dd.Description as description from phisco_ldc3.dictDistribution dd where  dd.DistributionId = d.Id and dd.LanguageId = {} limit 1
@@ -116,7 +116,7 @@ fn get_distros(pool: Pool) -> Vec<Distro>{
     }
 }
 
-fn get_questions(pool: Pool) -> Vec<Question>{
+fn get_questions(pool: &Pool) -> Vec<Question>{
     unsafe {
         let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,q.* from phisco_ldc3.Question q INNER JOIN phisco_ldc3.dictQuestion dq
 			ON LanguageId = {} and QuestionId= q.Id order by q.OrderIndex",LANG); 
@@ -131,7 +131,7 @@ fn get_questions(pool: Pool) -> Vec<Question>{
                 buttontext: String::new(),
                 help: r.take("help").unwrap(),
                 id: id, 
-                answers: get_answers(id),
+                answers: get_answers(&pool,id),
                 important: false,
                 number: i,
                 singleanswer: r.take("single").unwrap(),
@@ -144,9 +144,8 @@ fn get_questions(pool: Pool) -> Vec<Question>{
     }
 }
 
-fn get_answers(id: i32) -> Vec<Answer>{
+fn get_answers(pool: &Pool,id: i32) -> Vec<Answer>{
     unsafe {
-        let mut pool: Pool = connect_database();
         let query: String = format!("Select a.Id as id,(
 							Select da.Text from phisco_ldc3.dictAnswer da where da.AnswerId = a.Id and da.LanguageId = {}
 						)as text,a.Tags,a.NoTags,a.IsText as istext from phisco_ldc3.Answer a where a.QuestionId = {}",LANG,id); 
@@ -172,9 +171,8 @@ fn get_answers(id: i32) -> Vec<Answer>{
     }
 }
 
-fn get_i18n(p: Pool) -> HashMap<String,i18nValue>{
+fn get_i18n(pool: &Pool) -> HashMap<String,i18nValue>{
     unsafe {
-        let mut pool: Pool = connect_database();
         let query: String = format!("Select Text,Val, Val as Name from phisco_ldc3.dictSystem where LanguageId =  {}",LANG); 
         let mut values = HashMap::new();
         let mut conn = pool.get_conn().unwrap();
@@ -190,7 +188,7 @@ fn get_i18n(p: Pool) -> HashMap<String,i18nValue>{
     }
 }
 
-fn get_distro(pool: Pool, id: i32) -> APIResult{
+fn get_distro(pool: &Pool, id: i32) -> APIResult{
     let distros: Vec<Distro> = get_distros(pool);
     for distro in distros{
         if distro.id == id{
@@ -208,7 +206,7 @@ fn get_response(body: String) -> Response{
 }
 
 
-fn new_visitor(p: Pool,request: &mut Request) -> i32{
+fn new_visitor(pool: &Pool,request: &mut Request) -> i32{
     let mut useragent: String = String::new();
     let mut referer: String = String::new();
     match  request.headers.get::<iron::headers::UserAgent>() {
@@ -249,12 +247,12 @@ fn new_visitor(p: Pool,request: &mut Request) -> i32{
     let tm = time::now();
     let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
     let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT,Adblocker, API) VALUES (:time,:ref,:ua,:dnt,:adblocker,'waldorf')");
-    p.prep_exec(query,(time,referer ,useragent,dnt,adblocker)).unwrap();
+    pool.prep_exec(query,(time,referer ,useragent,dnt,adblocker)).unwrap();
 
     //return visitor id
     let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Visitor");
     let mut id: i32 = 0;
-    let mut conn = p.get_conn().unwrap();
+    let mut conn = pool.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
     for row in result {
         let mut r = row.unwrap();
@@ -271,11 +269,12 @@ fn index(_request: &mut Request) -> IronResult<Response> {
 }
 fn get(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
+    let mut p: Pool = connect_database();
     let result: get = get{
-        questions: get_questions(connect_database()),
-        distros: get_distros(connect_database()),
-        i18n: get_i18n(connect_database()),
-        visitor: new_visitor(connect_database(),_request)
+        questions: get_questions(&p),
+        distros: get_distros(&p),
+        i18n: get_i18n(&p),
+        visitor: new_visitor(&p,_request)
     };
 
     Ok(get_response(String::from(json::encode(&result).unwrap())))
@@ -283,7 +282,7 @@ fn get(_request: &mut Request) -> IronResult<Response>{
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request); 
     
-    let id: i32 = new_visitor(connect_database(),_request);
+    let id: i32 = new_visitor(&connect_database(),_request);
     let body: String = format!("{}",id);
 
 
@@ -420,13 +419,13 @@ fn newresult(_request: &mut Request) -> IronResult<Response> {
 
 fn distributions(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
-    let distros: Vec<Distro> = get_distros(connect_database());
+    let distros: Vec<Distro> = get_distros(&connect_database());
     Ok(get_response(String::from(json::encode(&distros).unwrap())))
 }
 fn distribution(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let id: i32 = get_id(_request);
-    let raw = get_distro(connect_database(),id);
+    let raw = get_distro(&connect_database(),id);
     let mut distro: Option<Distro> = None;
     match raw{
         Ok(n) => distro = Some(n),
@@ -442,12 +441,12 @@ fn distribution(_request: &mut Request) -> IronResult<Response> {
 }
 fn questions(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let questions: Vec<Question> = get_questions(connect_database());
+    let questions: Vec<Question> = get_questions(&connect_database());
     Ok(get_response(String::from(json::encode(&questions).unwrap())))
 }
 fn i18n(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let translation: HashMap<String,i18nValue> = get_i18n(connect_database());
+    let translation: HashMap<String,i18nValue> = get_i18n(&connect_database());
     Ok(get_response(String::from(json::encode(&translation).unwrap())))
 }
 /**

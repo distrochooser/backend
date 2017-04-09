@@ -1,34 +1,34 @@
 extern crate iron;
 extern crate router;
-#[macro_use]
-extern crate hyper;
-
-#[macro_use]
-extern crate params;
 extern crate rustc_serialize;
 extern crate time;
+
+#[macro_use]
+extern crate hyper;
+#[macro_use]
+extern crate params;
 #[macro_use]
 extern crate mysql;
-use std::io::prelude::*;
+
+use std::str;
+use std::env;
+use std::fmt;
+use std::collections::HashMap;
 use std::fs::File;
-use iron::prelude::*;
 use router::Router;
 use hyper::header::{ContentType};
+use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use iron::status;
 use rustc_serialize::json;
 use mysql::Pool;
-use std::str;
-use std::env;
-use std::collections::HashMap;
 use hyper::header::HeaderFormat;
-use std::fmt;
+use iron::prelude::*;
+use std::io::prelude::*;
+
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
 header! { (Server, "X-LDC") => [String] }
 static mut LANG: i32 = 1;
-
-
-
 
 fn main() {
     println!("Starting {} {}...",NAME, VERSION);
@@ -201,12 +201,9 @@ fn get_distro(pool: Pool, id: i32) -> APIResult{
 }
 fn get_response(body: String) -> Response{
     let mut resp = Response::with((status::Ok, body.to_owned()));
-    resp.headers.set(ContentType::json());
+    resp.headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
+                     vec![(Attr::Charset, Value::Utf8)])));
     resp.headers.set(Server(format!("{} {}",NAME,VERSION).to_owned()));
-    //TODO: CACHING
-    //let mut sha = Sha256::new();
-    //sha.input_str(body.as_str());
-    //println!("{}", sha.result_str());
     return resp;
 }
 

@@ -39,7 +39,7 @@ fn main() {
     router.get("/questions/:lang/", questions,"questions"); 
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
-    router.get("/get/:lang/", get,"get"); 
+    router.post("/get/:lang/", get,"get"); 
     router.post("/addresult/",newresult,"newresult");
     router.get("/getstats/",getstats,"getstats");
     router.get("/getratings/:lang/", getratings,"getratings"); 
@@ -207,6 +207,7 @@ fn get_response(body: String) -> Response{
     return resp;
 }
 
+
 fn new_visitor(p: Pool,request: &mut Request) -> i32{
     let mut useragent: String = String::new();
     let mut referer: String = String::new();
@@ -218,11 +219,37 @@ fn new_visitor(p: Pool,request: &mut Request) -> i32{
         Some(x) => referer = format!("{}",x),
         None    => referer = String::new(),
     }
+
+    let params = request.get_ref::<params::Params>().unwrap();
+    use params::{Params, Value};
+    let mut adblocker: i32 = 0;
+    let mut dnt: i32 = 0;
+    match params.find(&["adblocker"]) {
+        Some(&Value::String(ref name)) if name != "" => {
+            if name == "true"{
+                adblocker = 1;
+            }else{
+                adblocker = 0;
+            }
+        },
+        _ => adblocker = 0
+    }
+
+    match params.find(&["dnt"]) {
+        Some(&Value::String(ref name)) if name != "" => {
+            if name == "true"{
+                dnt = 1;
+            }else{
+                dnt = 0;
+            }
+        },
+        _ => dnt = 0
+    }
+
     let tm = time::now();
     let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
-    //TODO: DNT
-    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT, API) VALUES (:time,:ref,:ua,:dnt,'waldorf')");
-    p.prep_exec(query,(time,referer ,useragent,true)).unwrap();
+    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT,Adblocker, API) VALUES (:time,:ref,:ua,:dnt,:adblocker,'waldorf')");
+    p.prep_exec(query,(time,referer ,useragent,dnt,adblocker)).unwrap();
 
     //return visitor id
     let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Visitor");
@@ -250,12 +277,17 @@ fn get(_request: &mut Request) -> IronResult<Response>{
         i18n: get_i18n(connect_database()),
         visitor: new_visitor(connect_database(),_request)
     };
+
     Ok(get_response(String::from(json::encode(&result).unwrap())))
 }
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
-    middleware(_request);
+    middleware(_request); 
+    
     let id: i32 = new_visitor(connect_database(),_request);
     let body: String = format!("{}",id);
+
+
+
     Ok(get_response(body))
 }
 

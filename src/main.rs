@@ -30,6 +30,8 @@ static VERSION:  &'static str = "3.0.0";
 header! { (Server, "X-LDC") => [String] }
 static mut LANG: i32 = 1;
 
+mod structs;
+
 fn main() {
     println!("Starting {} {}...",NAME, VERSION);
     let mut router = Router::new();
@@ -40,7 +42,7 @@ fn main() {
     router.get("/i18n/:lang/", i18n,"i18n"); 
     router.get("/newvisitor/", newvisitor,"newvisitor"); 
     router.post("/get/:lang/", get,"get"); 
-    router.post("/addresult/",newresult,"newresult");
+    router.post("/addresult/",addresult,"addresult");
     router.get("/getstats/",getstats,"getstats");
     router.get("/getratings/:lang/", getratings,"getratings"); 
     router.post("/addrating/:lang/", addrating,"addrating"); 
@@ -76,29 +78,23 @@ fn language(request: &mut Request){
             _ => LANG = 2,
         }
     }
-    /*
-    let get =  request.get_ref::<Params>();
-    for item in get {
-        println!("{:?}",item); //get
-    }
-    */
 }
 
 fn get_id(request: &mut Request) -> i32{
     return request.extensions.get::<Router>().unwrap().find("id").unwrap().parse::<i32>().unwrap();
 }
 
-fn get_distros(pool: &Pool) -> Vec<Distro>{
+fn get_distros(pool: &Pool) -> Vec<structs::Distro>{
     unsafe {
         let query: String = format!("Select d.Id as id ,d.Name as name,d.Homepage as homepage,d.Image as image, (
         Select dd.Description as description from phisco_ldc3.dictDistribution dd where  dd.DistributionId = d.Id and dd.LanguageId = {} limit 1
         ) as description,d.ImageSource as imagesource,d.TextSource as textsource,d.ColorCode as colorcode,d.Characteristica  as characteristica from  phisco_ldc3.Distribution d",LANG); 
-        let mut distros: Vec<Distro> = Vec::new();
+        let mut distros: Vec<structs::Distro> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
         for row in result {
             let mut r = row.unwrap();
-            let mut d = Distro{
+            let mut d = structs::Distro{
                     id:  r.take("id").unwrap(),
                     name:r.take("name").unwrap(),
                     description: r.take("description").unwrap(),
@@ -116,18 +112,18 @@ fn get_distros(pool: &Pool) -> Vec<Distro>{
     }
 }
 
-fn get_questions(pool: &Pool) -> Vec<Question>{
+fn get_questions(pool: &Pool) -> Vec<structs::Question>{
     unsafe {
         let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,q.* from phisco_ldc3.Question q INNER JOIN phisco_ldc3.dictQuestion dq
 			ON LanguageId = {} and QuestionId= q.Id order by q.OrderIndex",LANG); 
-        let mut questions: Vec<Question> = Vec::new();
+        let mut questions: Vec<structs::Question> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
         let mut i:i32 = 1;
         for row in result {
            let mut r = row.unwrap();
            let mut id: i32 = r.take("id").unwrap();
-           let mut q = Question{             
+           let mut q = structs::Question{             
                 buttontext: String::new(),
                 help: r.take("help").unwrap(),
                 id: id, 
@@ -144,19 +140,19 @@ fn get_questions(pool: &Pool) -> Vec<Question>{
     }
 }
 
-fn get_answers(pool: &Pool,id: i32) -> Vec<Answer>{
+fn get_answers(pool: &Pool,id: i32) -> Vec<structs::Answer>{
     unsafe {
         let query: String = format!("Select a.Id as id,(
 							Select da.Text from phisco_ldc3.dictAnswer da where da.AnswerId = a.Id and da.LanguageId = {}
 						)as text,a.Tags,a.NoTags,a.IsText as istext from phisco_ldc3.Answer a where a.QuestionId = {}",LANG,id); 
-        let mut answers: Vec<Answer> = Vec::new();
+        let mut answers: Vec<structs::Answer> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
         for row in result {
            let mut r = row.unwrap();
            let tags: String = r.take("Tags").unwrap();
            let notags: String= r.take("NoTags").unwrap();
-           let mut a = Answer{              
+           let mut a = structs::Answer{              
                 id: r.take("id").unwrap(),
                 text: r.take("text").unwrap(),
                 notags: json::decode(&notags).unwrap(),
@@ -171,7 +167,7 @@ fn get_answers(pool: &Pool,id: i32) -> Vec<Answer>{
     }
 }
 
-fn get_i18n(pool: &Pool) -> HashMap<String,i18nValue>{
+fn get_i18n(pool: &Pool) -> HashMap<String,structs::i18nValue>{
     unsafe {
         let query: String = format!("Select Text,Val, Val as Name from phisco_ldc3.dictSystem where LanguageId =  {}",LANG); 
         let mut values = HashMap::new();
@@ -182,20 +178,20 @@ fn get_i18n(pool: &Pool) -> HashMap<String,i18nValue>{
            let text: String = r.take("Text").unwrap();
            let val: String = r.take("Val").unwrap();
            let name: String = r.take("Name").unwrap();
-           values.insert(name,i18nValue::new(text,val));
+           values.insert(name,structs::i18nValue::new(text,val));
         }
         return values;
     }
 }
 
-fn get_distro(pool: &Pool, id: i32) -> APIResult{
-    let distros: Vec<Distro> = get_distros(pool);
+fn get_distro(pool: &Pool, id: i32) -> structs::APIResult{
+    let distros: Vec<structs::Distro> = get_distros(pool);
     for distro in distros{
         if distro.id == id{
             return Ok(distro)
         }
     }
-    return Err(APIError::DistroNotFound)
+    return Err(structs::APIError::DistroNotFound)
 }
 fn get_response(body: String) -> Response{
     let mut resp = Response::with((status::Ok, body.to_owned()));
@@ -270,7 +266,7 @@ fn index(_request: &mut Request) -> IronResult<Response> {
 fn get(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
     let mut p: Pool = connect_database();
-    let result: get = get{
+    let result: structs::Get = structs::Get{
         questions: get_questions(&p),
         distros: get_distros(&p),
         i18n: get_i18n(&p),
@@ -294,22 +290,21 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let max_id: String = String::from("SELECT 
     COUNT( Id ) as results ,
-    DATE_FORMAT(DATE, '%d/%m') AS MONTH,
-    DATE_FORMAT(DATE, '%d/%m/%Y') AS FullDate,
+    DATE_FORMAT(DATE, '%d/%m/%Y') AS MONTH,
     (
-    Select count(Id) from phisco_ldc3.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = FullDate
+    Select count(Id) from phisco_ldc3.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = MONTH
     ) as visitors
     FROM phisco_ldc3.Result
     WHERE YEAR( DATE ) = YEAR( CURDATE( ) )
     and MONTH(DATE) = MONTH(CURDATE())
-    GROUP BY FullDate");
+    GROUP BY MONTH");
     let mut p: Pool = connect_database();
     let mut conn = p.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
-    let mut stats: Vec<stat> = Vec::new();
+    let mut stats: Vec<structs::Stat> = Vec::new();
     for row in result {
         let mut r = row.unwrap();
-        let mut s = stat{              
+        let mut s = structs::Stat{              
             MONTH: r.take("MONTH").unwrap(),
             count: r.take("visitors").unwrap(),
             tests: r.take("results").unwrap(),
@@ -323,13 +318,13 @@ fn getratings(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     unsafe {
         let query: String = format!("Select * from phisco_ldc3.Rating where Approved = 1 and Lang = {} and Test is not null order by ID desc limit 7",LANG); 
-        let mut ratings: Vec<rating> = Vec::new();
+        let mut ratings: Vec<structs::Rating> = Vec::new();
         let mut pool: Pool = connect_database();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
         for row in result {
             let mut r = row.unwrap();
-            let mut comment = rating{
+            let mut comment = structs::Rating{
                     ID:  r.take("ID").unwrap(),
                     Rating: r.take("Rating").unwrap(),
                     UserAgent: r.take("UserAgent").unwrap(),
@@ -362,7 +357,7 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
     }
 }
 
-fn newresult(_request: &mut Request) -> IronResult<Response> {    
+fn addresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
 
    // let tags = rustc_serialize::json::Json::from_str(&tags_json).unwrap();
@@ -407,7 +402,7 @@ fn newresult(_request: &mut Request) -> IronResult<Response> {
         id = r.take("id").unwrap();
     }
 
-    let distros: Vec<Distro> = json::decode(&distro_json).unwrap();
+    let distros: Vec<structs::Distro> = json::decode(&distro_json).unwrap();
 
     for distro in distros{
         let add_result: String = String::from("Insert into phisco_ldc3.ResultDistro (DistroId,ResultId) Values(:distro,:result)");
@@ -419,14 +414,14 @@ fn newresult(_request: &mut Request) -> IronResult<Response> {
 
 fn distributions(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
-    let distros: Vec<Distro> = get_distros(&connect_database());
+    let distros: Vec<structs::Distro> = get_distros(&connect_database());
     Ok(get_response(String::from(json::encode(&distros).unwrap())))
 }
 fn distribution(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let id: i32 = get_id(_request);
     let raw = get_distro(&connect_database(),id);
-    let mut distro: Option<Distro> = None;
+    let mut distro: Option<structs::Distro> = None;
     match raw{
         Ok(n) => distro = Some(n),
         Err(_) => distro = None
@@ -441,105 +436,12 @@ fn distribution(_request: &mut Request) -> IronResult<Response> {
 }
 fn questions(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let questions: Vec<Question> = get_questions(&connect_database());
+    let questions: Vec<structs::Question> = get_questions(&connect_database());
     Ok(get_response(String::from(json::encode(&questions).unwrap())))
 }
 fn i18n(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
-    let translation: HashMap<String,i18nValue> = get_i18n(&connect_database());
+    let translation: HashMap<String,structs::i18nValue> = get_i18n(&connect_database());
     Ok(get_response(String::from(json::encode(&translation).unwrap())))
 }
-/**
-* Structs
-*/
-#[derive(RustcDecodable, RustcEncodable)]
-pub struct Distro {
-    id: i32,
-    name: String,
-    description: String,
-    homepage: String,
-    image: String,
-    imagesource: String,
-    textsource: String,
-    colorcode: String,
-    tags: Vec<String>
-}
 
-impl Distro{
-    fn get_tags(&self,s: String) -> Vec<String> {
-        let v: Vec<String> = json::decode(&s.to_owned()).unwrap();
-        return v;
-    }
-}
-
-#[derive(RustcDecodable, RustcEncodable)]
-struct Question{
-    answers: Vec<Answer>,
-    buttontext: String,
-    help: String,
-    id: i32,
-    important: bool,
-    number: i32,
-    singleanswer: bool,
-    text: String
-}
-
-#[derive(RustcDecodable, RustcEncodable)]
-struct Answer{
-    id: i32,
-    image: String,
-    istext: bool,
-    selected: bool,
-    tags: Vec<String>,
-    notags: Vec<String>,
-    text: String
-}
-
-#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
-struct i18nValue{
-    name: String,
-    val: String
-}
-
-#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
-struct stat{
-    count: i32,
-    tests: i32,
-    MONTH: String
-}
-
-#[derive(RustcDecodable, RustcEncodable)]
-struct get{
-    distros: Vec<Distro>,
-    questions: Vec<Question>,
-    i18n: HashMap<String,i18nValue>,
-    visitor: i32
-}
-
-
-#[derive(RustcDecodable, RustcEncodable)]
-struct rating{
-    ID: i32,
-    Rating: i32,
-    UserAgent: String,
-    Comment: String,
-    Test: i32
-}
-
-impl i18nValue {
-    fn new(n: String, v: String) -> i18nValue {
-        i18nValue { val: n.to_string(), name: v.to_string() }
-    }
-}
-
-/**
-* Enums
-*/
-#[derive(RustcDecodable, RustcEncodable)]
-pub enum APIError {
-    DistroNotFound
-}
-/**
-* Types
-*/
-pub type APIResult = Result<Distro, APIError>;

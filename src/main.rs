@@ -13,17 +13,17 @@ extern crate mysql;
 use std::str;
 use std::env;
 use std::fmt;
-use std::collections::HashMap;
 use std::fs::File;
+use std::io::prelude::*;
+use std::collections::HashMap;
+
 use router::Router;
-use hyper::header::{ContentType};
+use hyper::header::{ContentType,HeaderFormat};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use iron::status;
-use rustc_serialize::json;
-use mysql::Pool;
-use hyper::header::HeaderFormat;
 use iron::prelude::*;
-use std::io::prelude::*;
+use mysql::Pool;
+use rustc_serialize::json;
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
@@ -272,17 +272,12 @@ fn get(_request: &mut Request) -> IronResult<Response>{
         i18n: get_i18n(&p),
         visitor: new_visitor(&p,_request)
     };
-
     Ok(get_response(String::from(json::encode(&result).unwrap())))
 }
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request); 
-    
     let id: i32 = new_visitor(&connect_database(),_request);
     let body: String = format!("{}",id);
-
-
-
     Ok(get_response(body))
 }
 
@@ -319,12 +314,12 @@ fn getratings(_request: &mut Request) -> IronResult<Response> {
     unsafe {
         let query: String = format!("Select * from phisco_ldc3.Rating where Approved = 1 and Lang = {} and Test is not null order by ID desc limit 7",LANG); 
         let mut ratings: Vec<structs::Rating> = Vec::new();
-        let mut pool: Pool = connect_database();
+        let pool: Pool = connect_database();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
         for row in result {
             let mut r = row.unwrap();
-            let mut comment = structs::Rating{
+            let comment = structs::Rating{
                     ID:  r.take("ID").unwrap(),
                     Rating: r.take("Rating").unwrap(),
                     UserAgent: r.take("UserAgent").unwrap(),
@@ -346,9 +341,9 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
             None    => useragent = String::new(),
         }
         let params = _request.get_ref::<params::Params>().unwrap();
-        let mut rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
-        let mut comment: String =  String::from(format!("{:?}",params["comment"]).replace('"',"").replace("\\",""));
-        let mut test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
+        let rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
+        let comment: String =  String::from(format!("{:?}",params["comment"]).replace('"',"").replace("\\",""));
+        let test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
 
         let query: String = String::from("Insert into phisco_ldc3.Rating (Rating,Date,UserAgent,Comment,Test,Lang) Values (?,CURRENT_TIMESTAMP,?,?,?,?)");
         let p: Pool = connect_database();

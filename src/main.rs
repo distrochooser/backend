@@ -346,10 +346,11 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
         let rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
         let comment: String =  String::from(format!("{:?}",params["comment"]).replace('"',"").replace("\\",""));
         let test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
+        let email: String    = String::from(format!("{:?}",params["email"]).replace('"',"").replace("\\",""));
 
-        let query: String = String::from("Insert into phisco_ldc3.Rating (Rating,Date,UserAgent,Comment,Test,Lang) Values (?,CURRENT_TIMESTAMP,?,?,?,?)");
+        let query: String = String::from("Insert into phisco_ldc3.Rating (Rating,Date,UserAgent,Comment,Test,Lang,Email) Values (?,CURRENT_TIMESTAMP,?,?,?,?,?)");
         let p: Pool = connect_database();
-        p.prep_exec(query,(rating,useragent ,comment,test,LANG)).unwrap();
+        p.prep_exec(query,(rating,useragent ,comment,test,LANG,email)).unwrap();
         Ok(get_response(format!("{}",rating)))
     }
 }

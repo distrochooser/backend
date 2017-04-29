@@ -114,7 +114,7 @@ fn get_distros(pool: &Pool) -> Vec<structs::Distro>{
 
 fn get_questions(pool: &Pool) -> Vec<structs::Question>{
     unsafe {
-        let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,q.* from phisco_ldc3.Question q INNER JOIN phisco_ldc3.dictQuestion dq
+        let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,if(ExclusionTags is null,'[]',ExclusionTags) as exclusiontags from phisco_ldc3.Question q INNER JOIN phisco_ldc3.dictQuestion dq
 			ON LanguageId = {} and QuestionId= q.Id order by q.OrderIndex",LANG); 
         let mut questions: Vec<structs::Question> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
@@ -128,11 +128,13 @@ fn get_questions(pool: &Pool) -> Vec<structs::Question>{
                 help: r.take("help").unwrap(),
                 id: id, 
                 answers: get_answers(&pool,id),
+                exclusiontags: Vec::new(),
                 important: false,
                 number: i,
                 singleanswer: r.take("single").unwrap(),
                 text: r.take("text").unwrap()
            };
+           q.exclusiontags =  q.get_exclusiontags(r.take("exclusiontags").unwrap());
            questions.push(q);
            i +=1;
         }

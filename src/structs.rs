@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Question{
     pub answers: Vec<Answer>,
+    pub exclusiontags: Vec<String>,
     pub buttontext: String,
     pub help: String,
     pub id: i32,
@@ -11,6 +12,13 @@ pub struct Question{
     pub number: i32,
     pub singleanswer: bool,
     pub text: String
+}
+
+impl Question{
+   pub  fn get_exclusiontags(&self,s: String) -> Vec<String> {
+        let v: Vec<String> = json::decode(&s.to_owned()).unwrap();
+        return v;
+    }
 }
 
 #[derive(RustcDecodable, RustcEncodable)]   

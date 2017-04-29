@@ -286,10 +286,10 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
 fn getstats(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let max_id: String = String::from("SELECT 
-    COUNT( Id ) as results ,
+    count(Id) as results ,
     DATE_FORMAT(DATE, '%d/%m/%Y') AS MONTH,
     (
-    Select count(Id) from phisco_ldc3.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = MONTH
+        Select count(Id) from phisco_ldc3.Visitor v where Date(v.Date) = Date(Date)
     ) as visitors
     FROM phisco_ldc3.Result
     WHERE YEAR( DATE ) = YEAR( CURDATE( ) )

@@ -375,10 +375,26 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
             None    => useragent = String::new(),
         }
         let params = _request.get_ref::<params::Params>().unwrap();
-        let rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
-        let comment: String =  String::from(format!("{:?}",params["comment"]).replace('"',"").replace("\\",""));
-        let test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
-        let email: String    = String::from(format!("{:?}",params["email"]).replace('"',"").replace("\\",""));
+        
+        let rating: i32 = String::from(format!("{:?}",params["rating"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);       
+ 
+        use params::{Params, Value};
+        let mut comment: String = String::new();
+        match params.find(&["comment"]) {
+            Some(&Value::String(ref val)) => {
+                comment = val.to_owned()
+            },
+            _ => (),
+        }
+        let test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);        
+
+        let mut email: String = String::new();
+        match params.find(&["email"]) {
+            Some(&Value::String(ref val)) => {
+                email = val.to_owned()
+            },
+            _ => (),
+        }
 
         let query: String = format!("Insert into {}.Rating (Rating,Date,UserAgent,Comment,Test,Lang,Email) Values (?,CURRENT_TIMESTAMP,?,?,?,?,?)",DATABASE);
         let p: Pool = connect_database();
@@ -397,17 +413,36 @@ fn addresult(_request: &mut Request) -> IronResult<Response> {
     }
 
     let params = _request.get_ref::<params::Params>().unwrap();
-    let mut distro_json: String = format!("{:?}",params["distros"]);
-    distro_json = String::from(distro_json.trim_matches('"').replace("\\",""));
 
-    let mut tags_json: String = format!("{:?}",params["tags"]);
-    tags_json = String::from(tags_json.trim_matches('"').replace("\\",""));
-
-    let mut answers_json: String = format!("{:?}",params["answers"]);
-    answers_json = String::from(answers_json.trim_matches('"').replace("\\",""));
-    
-    let mut important_json: String = format!("{:?}",params["important"]); 
-    important_json = String::from(important_json.trim_matches('"').replace("\\",""));
+    use params::{Params, Value};
+    let mut distro_json: String = String::new();
+    match params.find(&["distros"]) {
+        Some(&Value::String(ref val)) => {
+            distro_json = val.to_owned()
+        },
+        _ => (),
+    }
+    let mut tags_json: String = String::new();
+    match params.find(&["tags"]) {
+        Some(&Value::String(ref val)) => {
+            tags_json = val.to_owned()
+        },
+        _ => (),
+    }
+    let mut answers_json: String = String::new();
+    match params.find(&["answers"]) {
+        Some(&Value::String(ref val)) => {
+            answers_json = val.to_owned()
+        },
+        _ => (),
+    }
+    let mut important_json: String = String::new();
+    match params.find(&["important"]) {
+        Some(&Value::String(ref val)) => {
+            important_json = val.to_owned()
+        },
+        _ => (),
+    }
 
     let p: Pool = connect_database();
     let query: String = format!("Insert into {}.Result (Date,UserAgent,Tags, Answers,Important) Values(CURRENT_TIMESTAMP,:ua,:tags,:answers,:important)",DATABASE);

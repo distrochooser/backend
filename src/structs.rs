@@ -104,3 +104,15 @@ impl Distro{
         return v;
     }
 }
+
+#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
+pub struct Test{
+    pub answers: Vec<i32>,
+    pub important: Vec<i32>
+}
+impl Test{
+   pub  fn get_tags(&self,s: String) -> Vec<i32> {
+        let v: Vec<i32> = json::decode(&s.to_owned()).unwrap();
+        return v;
+    }
+}

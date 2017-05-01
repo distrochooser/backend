@@ -27,13 +27,14 @@ use rustc_serialize::json;
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
+static DATABASE: &'static str = "phisco_ldc4";
 header! { (Server, "X-LDC") => [String] }
 static mut LANG: i32 = 1;
 
 mod structs;
 
 fn main() {
-    println!("Starting {} {}...",NAME, VERSION);
+    println!("{} {}",NAME, VERSION);
     let mut router = Router::new();
     router.get("/", index, "index"); 
     router.get("/distributions/:lang/", distributions,"distros"); 
@@ -46,6 +47,7 @@ fn main() {
     router.get("/getstats/",getstats,"getstats");
     router.get("/getratings/:lang/", getratings,"getratings"); 
     router.post("/addrating/:lang/", addrating,"addrating"); 
+    router.get("/test/:id/", gettest,"gettest"); 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -87,8 +89,8 @@ fn get_id(request: &mut Request) -> i32{
 fn get_distros(pool: &Pool) -> Vec<structs::Distro>{
     unsafe {
         let query: String = format!("Select d.Id as id ,d.Name as name,d.Homepage as homepage,d.Image as image, (
-        Select dd.Description as description from phisco_ldc3.dictDistribution dd where  dd.DistributionId = d.Id and dd.LanguageId = {} limit 1
-        ) as description,d.ImageSource as imagesource,d.TextSource as textsource,d.ColorCode as colorcode,d.Characteristica  as characteristica from  phisco_ldc3.Distribution d",LANG); 
+        Select dd.Description as description from {}.dictDistribution dd where  dd.DistributionId = d.Id and dd.LanguageId = {} limit 1
+        ) as description,d.ImageSource as imagesource,d.TextSource as textsource,d.ColorCode as colorcode,d.Characteristica  as characteristica from  {}.Distribution d order by d.Name",DATABASE,LANG,DATABASE); 
         let mut distros: Vec<structs::Distro> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
@@ -114,8 +116,8 @@ fn get_distros(pool: &Pool) -> Vec<structs::Distro>{
 
 fn get_questions(pool: &Pool) -> Vec<structs::Question>{
     unsafe {
-        let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,if(ExclusionTags is null,'[]',ExclusionTags) as exclusiontags from phisco_ldc3.Question q INNER JOIN phisco_ldc3.dictQuestion dq
-			ON LanguageId = {} and QuestionId= q.Id order by q.OrderIndex",LANG); 
+        let query: String = format!("Select q.Id as id,q.OrderIndex, dq.Text as text,q.Single as single, dq.Help as help,if(ExclusionTags is null,'[]',ExclusionTags) as exclusiontags from {}.Question q INNER JOIN {}.dictQuestion dq
+			ON LanguageId = {} and QuestionId= q.Id order by q.OrderIndex",DATABASE,DATABASE,LANG); 
         let mut questions: Vec<structs::Question> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
@@ -145,8 +147,8 @@ fn get_questions(pool: &Pool) -> Vec<structs::Question>{
 fn get_answers(pool: &Pool,id: i32) -> Vec<structs::Answer>{
     unsafe {
         let query: String = format!("Select a.Id as id,(
-							Select da.Text from phisco_ldc3.dictAnswer da where da.AnswerId = a.Id and da.LanguageId = {}
-						)as text,a.Tags,a.NoTags,a.IsText as istext from phisco_ldc3.Answer a where a.QuestionId = {}",LANG,id); 
+							Select da.Text from {}.dictAnswer da where da.AnswerId = a.Id and da.LanguageId = {}
+						)as text,a.Tags,a.NoTags,a.IsText as istext from {}.Answer a where a.QuestionId = {}",DATABASE,LANG,DATABASE,id); 
         let mut answers: Vec<structs::Answer> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
@@ -171,7 +173,7 @@ fn get_answers(pool: &Pool,id: i32) -> Vec<structs::Answer>{
 
 fn get_i18n(pool: &Pool) -> HashMap<String,structs::i18nValue>{
     unsafe {
-        let query: String = format!("Select Text,Val, Val as Name from phisco_ldc3.dictSystem where LanguageId =  {}",LANG); 
+        let query: String = format!("Select Text,Val, Val as Name from {}.dictSystem where LanguageId =  {}",DATABASE,LANG); 
         let mut values = HashMap::new();
         let mut conn = pool.get_conn().unwrap();
         let result = conn.prep_exec(query,()).unwrap();
@@ -244,11 +246,11 @@ fn new_visitor(pool: &Pool,request: &mut Request) -> i32{
 
     let tm = time::now();
     let time = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
-    let query: String = String::from("Insert into phisco_ldc3.Visitor (Date, Referrer, Useragent, DNT,Adblocker, API) VALUES (:time,:ref,:ua,:dnt,:adblocker,'waldorf')");
+    let query: String = format!("Insert into {}.Visitor (Date, Referrer, Useragent, DNT,Adblocker, API) VALUES (:time,:ref,:ua,:dnt,:adblocker,'waldorf')",DATABASE);
     pool.prep_exec(query,(time,referer ,useragent,dnt,adblocker)).unwrap();
 
     //return visitor id
-    let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Visitor");
+    let max_id: String = format!("Select max(Id) as id from {}.Visitor",DATABASE);
     let mut id: i32 = 0;
     let mut conn = pool.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
@@ -285,16 +287,17 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
 
 fn getstats(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
-    let max_id: String = String::from("SELECT 
-    count(Id) as results ,
-    DATE_FORMAT(DATE, '%d/%m/%Y') AS MONTH,
+    let max_id: String = format!("SELECT 
+    COUNT( Id ) as count ,
+    DATE_FORMAT(DATE, '%d/%m') AS MONTH,
+    DATE_FORMAT(DATE, '%d/%m/%Y') AS FullDate,
     (
-        Select count(Id) from phisco_ldc3.Visitor v where Date(v.Date) = Date(Date)
-    ) as visitors
-    FROM phisco_ldc3.Result
+    Select count(Id) from {}.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = FullDate
+    ) as hits
+    FROM {}.Result
     WHERE YEAR( DATE ) = YEAR( CURDATE( ) )
     and MONTH(DATE) = MONTH(CURDATE())
-    GROUP BY MONTH");
+    GROUP BY FullDate",DATABASE,DATABASE);
     let mut p: Pool = connect_database();
     let mut conn = p.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
@@ -303,8 +306,8 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
         let mut r = row.unwrap();
         let mut s = structs::Stat{              
             MONTH: r.take("MONTH").unwrap(),
-            count: r.take("visitors").unwrap(),
-            tests: r.take("results").unwrap(),
+            count: r.take("hits").unwrap(),
+            tests: r.take("count").unwrap(),
         };
         stats.push(s);        
     }
@@ -314,7 +317,7 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
 fn getratings(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     unsafe {
-        let query: String = format!("Select * from phisco_ldc3.Rating where Approved = 1 and Lang = {} and Test is not null order by ID desc limit 7",LANG); 
+        let query: String = format!("Select * from {}.Rating where Approved = 1 and Lang = {} and Test is not null order by ID desc limit 7",DATABASE,LANG); 
         let mut ratings: Vec<structs::Rating> = Vec::new();
         let pool: Pool = connect_database();
         let mut conn = pool.get_conn().unwrap();
@@ -334,6 +337,27 @@ fn getratings(_request: &mut Request) -> IronResult<Response> {
     }
 }
 
+fn gettest(_request: &mut Request) -> IronResult<Response>{
+    middleware(_request);
+    unsafe {
+        let ref id:i32 = get_id(_request);
+        let query: String = format!("Select Answers as answers, Important as important from {}.Result where Id = {}",DATABASE,id); 
+        let mut ratings: Vec<structs::Rating> = Vec::new();
+        let pool: Pool = connect_database();
+        let mut conn = pool.get_conn().unwrap();
+        let result = conn.prep_exec(query,()).unwrap();
+        let mut test= structs::Test{
+                    answers:  Vec::new(),
+                    important: Vec::new()
+        };
+        for row in result {
+            let mut r = row.unwrap();
+            test.answers = test.get_tags(r.take("answers").unwrap());
+            test.important = test.get_tags(r.take("important").unwrap());
+        }
+        Ok(get_response(String::from(json::encode(&test).unwrap())))
+    }
+}
 fn addrating(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
     unsafe {
@@ -348,7 +372,7 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
         let test: i32 = String::from(format!("{:?}",params["test"]).replace('"',"").replace("\\","")).parse().unwrap_or(0);
         let email: String    = String::from(format!("{:?}",params["email"]).replace('"',"").replace("\\",""));
 
-        let query: String = String::from("Insert into phisco_ldc3.Rating (Rating,Date,UserAgent,Comment,Test,Lang,Email) Values (?,CURRENT_TIMESTAMP,?,?,?,?,?)");
+        let query: String = format!("Insert into {}.Rating (Rating,Date,UserAgent,Comment,Test,Lang,Email) Values (?,CURRENT_TIMESTAMP,?,?,?,?,?)",DATABASE);
         let p: Pool = connect_database();
         p.prep_exec(query,(rating,useragent ,comment,test,LANG,email)).unwrap();
         Ok(get_response(format!("{}",rating)))
@@ -387,11 +411,11 @@ fn addresult(_request: &mut Request) -> IronResult<Response> {
     important_json = String::from(important_json.trim_matches('"').replace("\\",""));
 
     let p: Pool = connect_database();
-    let query: String = String::from("Insert into phisco_ldc3.Result (Date,UserAgent,Tags, Answers,Important) Values(CURRENT_TIMESTAMP,:ua,:tags,:answers,:important)");
+    let query: String = format!("Insert into {}.Result (Date,UserAgent,Tags, Answers,Important) Values(CURRENT_TIMESTAMP,:ua,:tags,:answers,:important)",DATABASE);
     p.prep_exec(query,(useragent,tags_json,answers_json,important_json)).unwrap();
 
     //return result id
-    let max_id: String = String::from("Select max(Id) as id from phisco_ldc3.Result");
+    let max_id: String = format!("Select max(Id) as id from {}.Result",DATABASE);
     let mut id: i32 = 0;
     let mut conn = p.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
@@ -400,11 +424,11 @@ fn addresult(_request: &mut Request) -> IronResult<Response> {
         id = r.take("id").unwrap();
     }
 
-    let distros: Vec<structs::Distro> = json::decode(&distro_json).unwrap();
+    let distros: Vec<i32> = json::decode(&distro_json).unwrap();
 
     for distro in distros{
-        let add_result: String = String::from("Insert into phisco_ldc3.ResultDistro (DistroId,ResultId) Values(:distro,:result)");
-        p.prep_exec(add_result,(distro.id,id)).unwrap();
+        let add_result: String = format!("Insert into {}.ResultDistro (DistroId,ResultId) Values(:distro,:result)",DATABASE);
+        p.prep_exec(add_result,(distro,id)).unwrap();
     }
 
     Ok(get_response(format!("{:?}",id)))

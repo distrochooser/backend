@@ -1,6 +1,5 @@
 extern crate iron;
 extern crate router;
-extern crate rustc_serialize;
 extern crate time;
 
 #[macro_use]
@@ -9,6 +8,11 @@ extern crate hyper;
 extern crate params;
 #[macro_use]
 extern crate mysql;
+
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
 
 use std::str;
 use std::env;
@@ -23,7 +27,7 @@ use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use iron::status;
 use iron::prelude::*;
 use mysql::Pool;
-use rustc_serialize::json;
+
 
 static NAME:  &'static str = "Rusty Distrochooser";
 static VERSION:  &'static str = "3.0.0";
@@ -159,8 +163,8 @@ fn get_answers(pool: &Pool,id: i32) -> Vec<structs::Answer>{
            let mut a = structs::Answer{              
                 id: r.take("id").unwrap(),
                 text: r.take("text").unwrap(),
-                notags: json::decode(&notags).unwrap(),
-                tags: json::decode(&tags).unwrap(),
+                notags:serde_json::from_str(&notags).unwrap(),
+                tags: serde_json::from_str(&tags).unwrap(),
                 image: String::new(),
                 istext: true,//r.take("istext").unwrap(),
                 selected: false
@@ -276,7 +280,8 @@ fn get(_request: &mut Request) -> IronResult<Response>{
         i18n: get_i18n(&p),
         visitor: new_visitor(&p,_request)
     };
-    Ok(get_response(String::from(json::encode(&result).unwrap())))
+    let response: String = serde_json::to_string(&result).unwrap();
+    Ok(get_response(response))
 }
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request); 
@@ -311,7 +316,8 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
         };
         stats.push(s);        
     }
-    Ok(get_response(String::from(json::encode(&stats).unwrap())))
+    let response: String = serde_json::to_string(&stats).unwrap();
+    Ok(get_response(response))
 }
 
 fn getratings(_request: &mut Request) -> IronResult<Response> {
@@ -333,7 +339,8 @@ fn getratings(_request: &mut Request) -> IronResult<Response> {
             };
             ratings.push(comment);
         }
-        Ok(get_response(String::from(json::encode(&ratings).unwrap())))
+        let response: String = serde_json::to_string(&ratings).unwrap();
+        Ok(get_response(response))
     }
 }
 
@@ -355,7 +362,8 @@ fn gettest(_request: &mut Request) -> IronResult<Response>{
             test.answers = test.get_tags(r.take("answers").unwrap());
             test.important = test.get_tags(r.take("important").unwrap());
         }
-        Ok(get_response(String::from(json::encode(&test).unwrap())))
+        let response: String = serde_json::to_string(&test).unwrap();
+        Ok(get_response(response))
     }
 }
 fn addrating(_request: &mut Request) -> IronResult<Response>{
@@ -381,15 +389,6 @@ fn addrating(_request: &mut Request) -> IronResult<Response>{
 
 fn addresult(_request: &mut Request) -> IronResult<Response> {    
     middleware(_request);
-
-   // let tags = rustc_serialize::json::Json::from_str(&tags_json).unwrap();
-   // let tagsObj = tags.as_object().unwrap();
-    /*for (key, value) in obj.iter() {
-        println!("{}: {}", key, value);
-    }
-    */
-   // let answers: Vec<String> = json::decode(&answers_json).unwrap();
-    //let important: Vec<String> = json::decode(&important_json).unwrap();
 
     let mut useragent: String = String::new();
     match  _request.headers.get::<iron::headers::UserAgent>() {
@@ -424,7 +423,7 @@ fn addresult(_request: &mut Request) -> IronResult<Response> {
         id = r.take("id").unwrap();
     }
 
-    let distros: Vec<i32> = json::decode(&distro_json).unwrap();
+    let distros: Vec<i32> = serde_json::from_str(&distro_json).unwrap();
 
     for distro in distros{
         let add_result: String = format!("Insert into {}.ResultDistro (DistroId,ResultId) Values(:distro,:result)",DATABASE);
@@ -437,7 +436,9 @@ fn addresult(_request: &mut Request) -> IronResult<Response> {
 fn distributions(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let distros: Vec<structs::Distro> = get_distros(&connect_database());
-    Ok(get_response(String::from(json::encode(&distros).unwrap())))
+    
+    let response: String = serde_json::to_string(&distros).unwrap();
+    Ok(get_response(response))
 }
 fn distribution(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
@@ -452,18 +453,21 @@ fn distribution(_request: &mut Request) -> IronResult<Response> {
     if distro.is_none(){
         resp = Response::with((status::NotFound,"Not found"));
     }else{
-        resp = get_response(String::from(json::encode(&distro).unwrap()));
+        resp = get_response(serde_json::to_string(&distro).unwrap());
+        
     }
     return Ok(resp);
 }
 fn questions(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
     let questions: Vec<structs::Question> = get_questions(&connect_database());
-    Ok(get_response(String::from(json::encode(&questions).unwrap())))
+    let response: String = serde_json::to_string(&questions).unwrap();
+    Ok(get_response(response))
 }
 fn i18n(_request: &mut Request) -> IronResult<Response>{
     middleware(_request);
     let translation: HashMap<String,structs::i18nValue> = get_i18n(&connect_database());
-    Ok(get_response(String::from(json::encode(&translation).unwrap())))
+    let response: String = serde_json::to_string(&translation).unwrap();
+    Ok(get_response(response))
 }
 

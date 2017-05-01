@@ -1,7 +1,7 @@
-use rustc_serialize::json;
 use std::collections::HashMap;
+use serde_json;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize)]
 pub struct Question{
     pub answers: Vec<Answer>,
     pub exclusiontags: Vec<String>,
@@ -16,12 +16,12 @@ pub struct Question{
 
 impl Question{
    pub  fn get_exclusiontags(&self,s: String) -> Vec<String> {
-        let v: Vec<String> = json::decode(&s.to_owned()).unwrap();
+        let v: Vec<String> = serde_json::from_str(&s.to_owned()).unwrap();
         return v;
     }
 }
 
-#[derive(RustcDecodable, RustcEncodable)]   
+#[derive(Serialize, Deserialize)]
 pub struct Answer{
     pub  id: i32,
     pub image: String,
@@ -32,7 +32,7 @@ pub struct Answer{
     pub text: String
 }
 
-#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct i18nValue{
     name: String,
     val: String
@@ -44,14 +44,14 @@ impl i18nValue {
     }
 }
 
-#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Stat{
     pub count: i32,
     pub tests: i32,
     pub MONTH: String
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize)]
 pub struct Get{
     pub distros: Vec<Distro>,
     pub questions: Vec<Question>,
@@ -60,7 +60,7 @@ pub struct Get{
 }
 
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize)]
 pub struct Rating{
     pub ID: i32,
     pub Rating: i32,
@@ -72,7 +72,7 @@ pub struct Rating{
 /**
 * Enums
 */
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize)]
 pub enum APIError {
     DistroNotFound
 }
@@ -85,7 +85,7 @@ pub type APIResult = Result<Distro, APIError>;
 /**
 * Structs
 */
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(Serialize, Deserialize)]
 pub struct Distro {
     pub id: i32,
     pub name: String,
@@ -100,19 +100,19 @@ pub struct Distro {
 
 impl Distro{
    pub  fn get_tags(&self,s: String) -> Vec<String> {
-        let v: Vec<String> = json::decode(&s.to_owned()).unwrap();
+        let v: Vec<String> = serde_json::from_str(&s.to_owned()).unwrap();
         return v;
     }
 }
 
-#[derive(RustcDecodable, RustcEncodable,Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Test{
     pub answers: Vec<i32>,
     pub important: Vec<i32>
 }
 impl Test{
    pub  fn get_tags(&self,s: String) -> Vec<i32> {
-        let v: Vec<i32> = json::decode(&s.to_owned()).unwrap();
+        let v: Vec<i32> = serde_json::from_str(&s.to_owned()).unwrap();
         return v;
     }
 }

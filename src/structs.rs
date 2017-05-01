@@ -11,7 +11,8 @@ pub struct Question{
     pub important: bool,
     pub number: i32,
     pub singleanswer: bool,
-    pub text: String
+    pub text: String,
+    pub answered: bool
 }
 
 impl Question{

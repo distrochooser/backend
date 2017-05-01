@@ -138,7 +138,8 @@ fn get_questions(pool: &Pool) -> Vec<structs::Question>{
                 important: false,
                 number: i,
                 singleanswer: r.take("single").unwrap(),
-                text: r.take("text").unwrap()
+                text: r.take("text").unwrap(),
+                answered: false
            };
            q.exclusiontags =  q.get_exclusiontags(r.take("exclusiontags").unwrap());
            questions.push(q);

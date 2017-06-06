@@ -294,16 +294,16 @@ fn newvisitor(_request: &mut Request) -> IronResult<Response> {
 fn getstats(_request: &mut Request) -> IronResult<Response> {
     middleware(_request);
     let max_id: String = format!("SELECT 
-    COUNT( Id ) as count ,
-    DATE_FORMAT(DATE, '%d/%m') AS MONTH,
-    DATE_FORMAT(DATE, '%d/%m/%Y') AS FullDate,
-    (
-    Select count(Id) from {}.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = FullDate
-    ) as hits
-    FROM {}.Result
-    WHERE YEAR( DATE ) = YEAR( CURDATE( ) )
-    and MONTH(DATE) = MONTH(CURDATE())
-    GROUP BY FullDate",DATABASE,DATABASE);
+        COUNT( Id ) as count ,
+        DATE_FORMAT(DATE, '%d/%m') AS MONTH,
+        DATE_FORMAT(DATE, '%d/%m/%Y') AS FullDate,
+        (
+        Select count(Id) from {}.Visitor where DATE_FORMAT(DATE, '%d/%m/%Y')  = FullDate
+        ) as hits
+        FROM {}.Result
+        WHERE YEAR( DATE ) = YEAR( CURDATE( ) )
+        and MONTH(DATE) = MONTH(CURDATE())
+        GROUP BY FullDate",DATABASE,DATABASE);
     let mut p: Pool = connect_database();
     let mut conn = p.get_conn().unwrap();
     let result = conn.prep_exec(max_id,()).unwrap();
@@ -312,11 +312,13 @@ fn getstats(_request: &mut Request) -> IronResult<Response> {
         let mut r = row.unwrap();
         let mut s = structs::Stat{              
             MONTH: r.take("MONTH").unwrap(),
-            count: r.take("hits").unwrap(),
-            tests: r.take("count").unwrap(),
+            hits: r.take("hits").unwrap(),
+            count: r.take("count").unwrap(),
+            FullDate: r.take("FullDate").unwrap()
         };
         stats.push(s);        
     }
+    stats.reverse();
     let response: String = serde_json::to_string(&stats).unwrap();
     Ok(get_response(response))
 }

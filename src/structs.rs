@@ -47,9 +47,10 @@ impl i18nValue {
 
 #[derive(Serialize, Deserialize)]
 pub struct Stat{
+    pub hits: i32,
     pub count: i32,
-    pub tests: i32,
-    pub MONTH: String
+    pub MONTH: String,
+    pub FullDate: String
 }
 
 #[derive(Serialize, Deserialize)]

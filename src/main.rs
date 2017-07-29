@@ -22,11 +22,13 @@ use std::io::prelude::*;
 use std::collections::HashMap;
 
 use router::Router;
-use hyper::header::{ContentType,HeaderFormat};
-use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
+use hyper::header::{ContentType};
+use hyper::mime::{Mime};
 use iron::status;
 use iron::prelude::*;
 use mysql::Pool;
+
+use iron::method::Method;
 
 
 static NAME:  &'static str = "Rusty Distrochooser";
@@ -52,6 +54,7 @@ fn main() {
     router.get("/getratings/:lang/", getratings,"getratings"); 
     router.post("/addrating/:lang/", addrating,"addrating"); 
     router.get("/test/:id/", gettest,"gettest"); 
+    router.options("*",options,"options");
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -76,6 +79,16 @@ fn middleware(request: &mut Request){
     let client = request.remote_addr.ip(); //TODO: Censor IP
     language(request);
 }
+
+fn handle_options(_request: &mut Request) -> bool{
+    let method : String = _request.method.as_ref().to_string();
+    return method == "OPTIONS"
+}
+fn options(_request: &mut Request) -> IronResult<Response> {    
+    middleware(_request);
+    Ok(get_response(String::from("Options :)")))
+}
+
 fn language(request: &mut Request){
     let ref lang:&str = request.extensions.get::<Router>().unwrap().find("lang").unwrap_or("/");
     unsafe{
@@ -204,9 +217,12 @@ fn get_distro(pool: &Pool, id: i32) -> structs::APIResult{
 }
 fn get_response(body: String) -> Response{
     let mut resp = Response::with((status::Ok, body.to_owned()));
-    resp.headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
-                     vec![(Attr::Charset, Value::Utf8)])));
-    resp.headers.set(Server(format!("{} {}",NAME,VERSION).to_owned()));
+    let mut server: String =  format!("{} {}",NAME,VERSION);
+    resp.headers.set_raw("content-type", vec![b"application/json;charset=utf-8".to_vec()]);
+    resp.headers.set_raw("server", vec![server.into_bytes()]);
+    resp.headers.set_raw("Access-Control-Allow-Origin",vec![b"*".to_vec()]);
+    resp.headers.set_raw("Access-Control-Allow-Method",vec![b"GET, OPTIONS, POST".to_vec()]);
+    resp.headers.set_raw("Access-Control-Allow-Headers",vec![b"Content-Type".to_vec()]);
     return resp;
 }
 
@@ -273,7 +289,7 @@ fn index(_request: &mut Request) -> IronResult<Response> {
     Ok(get_response(String::from("I'm an rusty API.")))
 }
 fn get(_request: &mut Request) -> IronResult<Response>{
-    middleware(_request);
+    middleware(_request); 
     let mut p: Pool = connect_database();
     let result: structs::Get = structs::Get{
         questions: get_questions(&p),
@@ -281,7 +297,7 @@ fn get(_request: &mut Request) -> IronResult<Response>{
         i18n: get_i18n(&p),
         visitor: new_visitor(&p,_request)
     };
-    let response: String = serde_json::to_string(&result).unwrap();
+    let response: String = serde_json::to_string(&result).unwrap();    
     Ok(get_response(response))
 }
 fn newvisitor(_request: &mut Request) -> IronResult<Response> {    

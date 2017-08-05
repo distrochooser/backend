@@ -4,6 +4,7 @@
 
 extern crate router;
 extern crate iron;
+extern crate params;
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
@@ -11,6 +12,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate mysql;
 extern crate time;
+extern crate bodyparser;
 
 use router::Router;
 use iron::Iron;
@@ -24,6 +26,9 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::str::FromStr;
+use params::Params;
+use iron::Plugin;
+
 
 
 fn main(){
@@ -34,6 +39,7 @@ fn main(){
     router.get("/distributions/:lang/:id/", get_distribution, "get_one_distros"); 
     router.get("/questions/:lang/", get_questions, "get_all_questions"); 
     router.get("/get/:lang/:adblocker/:dnt/",new_visitor, "get_new_visitor");
+    router.post("/addresult/:lang/:rating/:visitor/",add_result,"add_new_result");
 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
@@ -42,6 +48,74 @@ fn main(){
 */
 fn get_index(_request: &mut Request) -> IronResult<Response> {    
     Ok(get_response(String::from("I'm an rusty API.")))
+}
+
+#[derive(Debug, Clone, Deserialize,Serialize)]
+struct Result {
+    pub answers: Vec<i32>,
+    pub tags: Vec<Tag>
+}
+#[derive(Debug, Clone, Deserialize,Serialize)]
+struct Tag {
+    pub name: String,
+    pub weight: i32,
+    pub amount: i32,
+    pub negative: bool
+}
+
+fn add_result(_request: &mut Request) -> IronResult<Response> {  
+    let pool: Pool = connect_database();
+    //get meta info
+    let lang: String = get_lang(&pool,_request);
+    let ratingRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("rating").unwrap_or("0"));
+    let visitorRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("visitor").unwrap_or("0"));
+   
+    //let data =   _request.get_ref::<params::Params>().unwrap();
+    let rawResult = _request.get_ref::<bodyparser::Struct<Result>>();
+    let result: Result = rawResult.unwrap().to_owned().unwrap();
+    //create rating
+    let query: String = format!("Insert into Result (rating, visitorId) VALUES (:r,:v)"); 
+    let mut distros: Vec<Distro> = Vec::new();
+    let mut conn = pool.get_conn().unwrap();
+    conn.prep_exec(query,params!{
+            "r" => ratingRaw.to_owned(),
+            "v" => visitorRaw.to_owned()
+    }).unwrap();
+
+    let max_id: String = format!("Select max(id) as id from Result");
+    let mut resultId: i32 = 0;
+    let mut conn = pool.get_conn().unwrap();
+    let maxIdResult = conn.prep_exec(max_id,()).unwrap();
+    for row in maxIdResult {
+        let mut r = row.unwrap();
+        resultId = r.take("id").unwrap();
+    }
+    //insert answers
+    let answers: Vec<i32> = result.answers;
+    for answer in answers.to_owned() {
+        let query: String = format!("Insert into ResultAnswers (resultId, answer) VALUES (:r,:a)"); 
+        let mut distros: Vec<Distro> = Vec::new();
+        let mut conn = pool.get_conn().unwrap();
+        conn.prep_exec(query,params!{
+                "r" => resultId.to_owned(),
+                "a" => answer
+        }).unwrap();
+    }
+    //insert tags into database
+    let tags: Vec<Tag> = result.tags;
+    for tag in tags.to_owned() {
+        let query: String = format!("Insert into ResultTags (resultId, tag,weight,isNegative,amount) VALUES (:r,:t,:w,:i,:a)"); 
+        let mut distros: Vec<Distro> = Vec::new();
+        let mut conn = pool.get_conn().unwrap();
+        conn.prep_exec(query,params!{
+                "r" => resultId.to_owned(),
+                "t" => tag.name,
+                "w" => tag.weight,
+                "i" => tag.negative,
+                "a" => tag.amount
+        }).unwrap();
+    }
+    Ok(get_response(format!("{:?}",resultId)))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -92,7 +166,7 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
     }
 
 
-    let mut v = Visitor{
+    let v = Visitor{
         id: id,
         userAgent: userAgent,
         hasDNT: hasDNT,
@@ -103,6 +177,8 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
     let response: String = serde_json::to_string_pretty(&v).unwrap();
     Ok(get_response(response))
 }
+
+
 /**
 * /distributions/ and /distribution/:id/
 */
@@ -160,7 +236,7 @@ fn get_distributions(_request: &mut Request) -> IronResult<Response> {
 fn get_distribution(_request: &mut Request) -> IronResult<Response> {  
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
-    let mut id: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("id").unwrap()).parse::<i32>().unwrap();
+    let id: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("id").unwrap()).parse::<i32>().unwrap();
     
     let distros: Vec<Distro> = query_distributions(&pool,&lang);
     let mut response: Response = get_not_found_response();

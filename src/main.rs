@@ -29,6 +29,8 @@ fn main(){
     router.options("*",options,"catchall_options_route");
     router.get("/distributions/:lang/", get_distributions, "get_all_distros"); 
     router.get("/distributions/:lang/:id/", get_distribution, "get_one_distros"); 
+    router.get("/questions/:lang/", get_questions, "get_all_questions"); 
+
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -52,7 +54,9 @@ pub struct Distro{
     pub tags: Vec<String>,
     pub description: String
 }
-
+/**
+* Query database structs
+*/
 fn query_distributions(pool: &Pool, lang: &String) -> Vec<Distro>{
     let query: String = format!("Select * from Distro"); 
     let mut distros: Vec<Distro> = Vec::new();
@@ -77,7 +81,9 @@ fn query_distributions(pool: &Pool, lang: &String) -> Vec<Distro>{
     }
     return distros;
 }
-
+/**
+* Get all distributions
+*/
 fn get_distributions(_request: &mut Request) -> IronResult<Response> {  
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
@@ -85,7 +91,9 @@ fn get_distributions(_request: &mut Request) -> IronResult<Response> {
     let response: String = serde_json::to_string_pretty(&distros).unwrap();
     Ok(get_response(response))
 }
-
+/**
+* Get single distribution
+*/
 fn get_distribution(_request: &mut Request) -> IronResult<Response> {  
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
@@ -101,6 +109,90 @@ fn get_distribution(_request: &mut Request) -> IronResult<Response> {
     }
     Ok(response)
 }
+/**
+* /questions/:lang/
+*/
+#[derive(Serialize, Deserialize)]
+pub struct Question{
+    pub id: i32,
+    pub orderIndex: i32,
+    pub text: String,
+    pub title: String,
+    pub isText: bool,
+    pub isSingle: bool,
+    pub excludedBy: Vec<String>,
+    pub answers: Vec<Answer>
+}
+#[derive(Serialize, Deserialize)]
+pub struct Answer{
+    pub id: i32,
+    pub text: String,
+    pub tags: Vec<String>,
+    pub excludeTags: Vec<String>
+}
+
+/**
+* Query database structs
+*/
+fn query_questions(pool: &Pool, lang: &String) -> Vec<Question>{
+    let query: String = format!("Select * from Question"); 
+    let mut questions: Vec<Question> = Vec::new();
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec(query,()).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        let mut q = Question{
+                id:  r.take("id").unwrap(),
+                orderIndex:  r.take("orderIndex").unwrap(),
+                isSingle : r.take("isSingle").unwrap(),
+                isText : r.take("isText").unwrap(),
+                excludedBy: Vec::new(),
+                answers: Vec::new(),
+                title: String::new(),
+                text: String::new()
+        };
+        // get derived properties
+        q.text = get_i18n(&pool,format!("q.{:?}.text",q.id),lang);
+        q.title = get_i18n(&pool,format!("q.{:?}.title",q.id),lang);
+        let tags: String = r.take("excludedBy").unwrap();
+        q.excludedBy = serde_json::from_str(&tags).unwrap();
+        q.answers = query_answers(&pool,lang,q.id);
+        questions.push(q);
+    }
+    return questions;
+}
+fn query_answers(pool: &Pool, lang: &String, question: i32) -> Vec<Answer>{
+    let query: String = format!("Select * from Answer where questionId = :id"); 
+    let mut answers: Vec<Answer> = Vec::new();
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec(query,params!{
+            "id" => question
+    }).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        let mut a = Answer{
+                id:  r.take("id").unwrap(),
+                text: String::new(),
+                tags: Vec::new(),
+                excludeTags: Vec::new()
+        };
+        a.text = get_i18n(&pool,format!("a.{:?}.text",a.id),lang);
+        let  mut tags: String = r.take("tags").unwrap();
+        a.tags = serde_json::from_str(&tags).unwrap();
+        tags = r.take("excludeTags").unwrap();
+        a.excludeTags = serde_json::from_str(&tags).unwrap();
+        answers.push(a);
+    }
+    return answers;
+}
+fn get_questions(_request: &mut Request) -> IronResult<Response> {
+    let pool: Pool = connect_database();
+    let lang = get_lang(&pool,_request);
+    let questions: Vec<Question> = query_questions(&pool,&lang);
+    let response: String = serde_json::to_string_pretty(&questions).unwrap();
+    Ok(get_response(response))
+}
+
 /**
 * Helper functions
 */
@@ -146,7 +238,7 @@ fn get_i18n(pool: &Pool, val: String, lang: &String) -> String{
     let result = conn.prep_exec("Select * from i18n where langCode = :code and val = :value limit 1",
         params!{
             "code" => lang.to_owned(),
-            "value" => val
+            "value" => val.to_owned()
         }
     ).unwrap();
     for row in result {
@@ -154,7 +246,7 @@ fn get_i18n(pool: &Pool, val: String, lang: &String) -> String{
         let translation: String = r.take("translation").unwrap();
         return translation;
     }
-    return String::new();
+    return val.to_owned();
 }
 
 fn get_response(body: String) -> Response{

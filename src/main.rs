@@ -26,6 +26,7 @@ use std::io::prelude::*;
 use std::env;
 use std::str::FromStr;
 use iron::Plugin;
+use std::collections::HashMap;
 
 
 
@@ -39,8 +40,6 @@ fn main(){
     router.get("/get/:lang/:adblocker/:dnt/",new_visitor, "get_new_visitor");
     router.post("/addresult/:lang/:rating/:visitor/",add_result,"add_new_result");
     router.get("/getresult/:id/",get_result, "get_old_result");
-
-
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -166,7 +165,10 @@ pub struct Visitor{
     pub hasDNT: bool,
     pub hasAdblocker: bool,
     pub visitDate: String,
-    pub referrer: String
+    pub referrer: String,
+    pub questions: Vec<Question>,
+    pub distros: Vec<Distro>,
+    pub i18n:  HashMap<String,i18n>
 }
 fn new_visitor(_request: &mut Request) -> IronResult<Response> { 
     let pool: Pool = connect_database();
@@ -213,7 +215,10 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
         hasDNT: hasDNT,
         hasAdblocker: hasAdblocker,
         visitDate: visitDate,
-        referrer: referrer
+        referrer: referrer,
+        questions: query_questions(&pool, &lang),
+        distros: query_distributions(&pool, &lang),
+        i18n: get_all_translations(&pool, &lang)
     };
     let response: String = serde_json::to_string_pretty(&v).unwrap();
     Ok(get_response(response))
@@ -301,14 +306,16 @@ pub struct Question{
     pub isText: bool,
     pub isSingle: bool,
     pub excludedBy: Vec<String>,
-    pub answers: Vec<Answer>
+    pub answers: Vec<Answer>,
+    pub answered: bool
 }
 #[derive(Serialize, Deserialize)]
 pub struct Answer{
     pub id: i32,
     pub text: String,
     pub tags: Vec<String>,
-    pub excludeTags: Vec<String>
+    pub excludeTags: Vec<String>,
+    pub selected: bool
 }
 
 /**
@@ -329,7 +336,8 @@ fn query_questions(pool: &Pool, lang: &String) -> Vec<Question>{
                 excludedBy: Vec::new(),
                 answers: Vec::new(),
                 title: String::new(),
-                text: String::new()
+                text: String::new(),
+                answered: false
         };
         // get derived properties
         q.text = get_i18n(&pool,format!("q.{:?}.text",q.id),lang);
@@ -357,7 +365,8 @@ fn query_answers(pool: &Pool, lang: &String, question: i32) -> Vec<Answer>{
                 id:  r.take("id").unwrap(),
                 text: String::new(),
                 tags: Vec::new(),
-                excludeTags: Vec::new()
+                excludeTags: Vec::new(),
+                selected: false
         };
         a.text = get_i18n(&pool,format!("a.{:?}.text",a.id),lang);
         let  mut tags: String = r.take("tags").unwrap();
@@ -434,6 +443,32 @@ fn get_i18n(pool: &Pool, val: String, lang: &String) -> String{
         return translation;
     }
     return val.to_owned();
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct i18n{
+    pub val: String,
+    pub translation: String
+}
+
+fn get_all_translations(pool: &Pool, lang: &String) -> HashMap<String,i18n>{
+    let mut results: HashMap<String,i18n>=  HashMap::new();
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec("Select * from i18n where langCode = :code",
+        params!{
+            "code" => lang.to_owned()
+        }
+    ).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        let key: String = r.take("val").unwrap();
+        let element = i18n{
+            val: key.to_owned(),
+            translation: r.take("translation").unwrap()
+        };
+        results.insert(key, element);
+    }
+    return results;
 }
 
 fn get_response(body: String) -> Response{

@@ -10,10 +10,12 @@ extern crate serde_json;
 extern crate serde_derive;
 #[macro_use]
 extern crate mysql;
+extern crate time;
 
 use router::Router;
 use iron::Iron;
 use iron::status;
+use iron::headers::Header;
 use iron::response::Response;
 use iron::Request;
 use iron::IronResult;
@@ -21,7 +23,8 @@ use mysql::Pool;
 use std::fs::File;
 use std::io::prelude::*;
 use std::env;
-use std::ptr;
+use std::str::FromStr;
+
 
 fn main(){
     let mut router = Router::new();
@@ -30,6 +33,7 @@ fn main(){
     router.get("/distributions/:lang/", get_distributions, "get_all_distros"); 
     router.get("/distributions/:lang/:id/", get_distribution, "get_one_distros"); 
     router.get("/questions/:lang/", get_questions, "get_all_questions"); 
+    router.get("/get/:lang/:adblocker/:dnt/",new_visitor, "get_new_visitor");
 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
@@ -40,6 +44,65 @@ fn get_index(_request: &mut Request) -> IronResult<Response> {
     Ok(get_response(String::from("I'm an rusty API.")))
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Visitor{
+    pub id: i32,
+    pub userAgent: String,
+    pub hasDNT: bool,
+    pub hasAdblocker: bool,
+    pub visitDate: String,
+    pub referrer: String
+}
+fn new_visitor(_request: &mut Request) -> IronResult<Response> { 
+    let pool: Pool = connect_database();
+    let lang: String = get_lang(&pool,_request);
+    let hasAdblockerRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("adblocker").unwrap_or(""));
+    let hasDNTRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("dnt").unwrap_or(""));
+    let hasAdblocker = if (hasAdblockerRaw == "1" ) { true } else { false };
+    let hasDNT = if (hasDNTRaw == "1" ) { true } else { false };
+    let mut userAgent: String = String::new();
+    if( _request.headers.has::<iron::headers::UserAgent>() ) {
+        userAgent = String::from_str(_request.headers.get::<iron::headers::UserAgent>().unwrap().as_str()).unwrap();
+    }
+    let mut referrer: String = String::new();
+    if( _request.headers.has::<iron::headers::Referer>() ) {
+        referrer = String::from_str(_request.headers.get::<iron::headers::Referer>().unwrap().as_str()).unwrap();
+    }
+    let tm = time::now();
+    let visitDate = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
+    
+    let query: String = format!("Insert into Visitor (visitDate, userAgent,hasDNT, hasAdblocker, referrer) VALUES (:date,:ua,:dnt,:adblocker,:ref)"); 
+    let mut distros: Vec<Distro> = Vec::new();
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec(query,params!{
+            "date" => visitDate.to_owned(),
+            "ua" => userAgent.to_owned(),
+            "dnt" => hasDNT,
+            "adblocker" => hasAdblocker,
+            "ref" => referrer.to_owned()
+    }).unwrap();
+
+    let max_id: String = format!("Select max(id) as id from Visitor");
+    let mut id: i32 = 0;
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec(max_id,()).unwrap();
+    for row in result {
+        let mut r = row.unwrap();
+        id = r.take("id").unwrap();
+    }
+
+
+    let mut v = Visitor{
+        id: id,
+        userAgent: userAgent,
+        hasDNT: hasDNT,
+        hasAdblocker: hasAdblocker,
+        visitDate: visitDate,
+        referrer: referrer
+    };
+    let response: String = serde_json::to_string_pretty(&v).unwrap();
+    Ok(get_response(response))
+}
 /**
 * /distributions/ and /distribution/:id/
 */
@@ -161,6 +224,9 @@ fn query_questions(pool: &Pool, lang: &String) -> Vec<Question>{
     }
     return questions;
 }
+/**
+* get answers for a single question
+*/
 fn query_answers(pool: &Pool, lang: &String, question: i32) -> Vec<Answer>{
     let query: String = format!("Select * from Answer where questionId = :id"); 
     let mut answers: Vec<Answer> = Vec::new();
@@ -185,6 +251,9 @@ fn query_answers(pool: &Pool, lang: &String, question: i32) -> Vec<Answer>{
     }
     return answers;
 }
+/**
+* get all Questions
+*/
 fn get_questions(_request: &mut Request) -> IronResult<Response> {
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
@@ -192,6 +261,7 @@ fn get_questions(_request: &mut Request) -> IronResult<Response> {
     let response: String = serde_json::to_string_pretty(&questions).unwrap();
     Ok(get_response(response))
 }
+
 
 /**
 * Helper functions

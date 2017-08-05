@@ -5,6 +5,8 @@ authors = [ "Christoph Müller <me@0fury.de>" ]
 
 [dependencies.iron]
 version = "*"
+[dependencies.bodyparser]
+git = "https://github.com/iron/body-parser.git"
 
 [dependencies]
 router = "*"

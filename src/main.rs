@@ -17,7 +17,6 @@ extern crate bodyparser;
 use router::Router;
 use iron::Iron;
 use iron::status;
-use iron::headers::Header;
 use iron::response::Response;
 use iron::Request;
 use iron::IronResult;
@@ -26,7 +25,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::str::FromStr;
-use params::Params;
 use iron::Plugin;
 
 
@@ -40,6 +38,8 @@ fn main(){
     router.get("/questions/:lang/", get_questions, "get_all_questions"); 
     router.get("/get/:lang/:adblocker/:dnt/",new_visitor, "get_new_visitor");
     router.post("/addresult/:lang/:rating/:visitor/",add_result,"add_new_result");
+    router.get("/getresult/:id/",get_result, "get_old_result");
+
 
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
@@ -74,12 +74,12 @@ fn add_result(_request: &mut Request) -> IronResult<Response> {
     let rawResult = _request.get_ref::<bodyparser::Struct<Result>>();
     let result: Result = rawResult.unwrap().to_owned().unwrap();
     //create rating
-    let query: String = format!("Insert into Result (rating, visitorId) VALUES (:r,:v)"); 
-    let mut distros: Vec<Distro> = Vec::new();
+    let query: String = format!("Insert into Result (rating, visitorId, lang) VALUES (:r,:v, :l)"); 
     let mut conn = pool.get_conn().unwrap();
     conn.prep_exec(query,params!{
             "r" => ratingRaw.to_owned(),
-            "v" => visitorRaw.to_owned()
+            "v" => visitorRaw.to_owned(),
+            "l" => lang
     }).unwrap();
 
     let max_id: String = format!("Select max(id) as id from Result");
@@ -93,8 +93,7 @@ fn add_result(_request: &mut Request) -> IronResult<Response> {
     //insert answers
     let answers: Vec<i32> = result.answers;
     for answer in answers.to_owned() {
-        let query: String = format!("Insert into ResultAnswers (resultId, answer) VALUES (:r,:a)"); 
-        let mut distros: Vec<Distro> = Vec::new();
+        let query: String = format!("Insert into ResultAnswers (resultId, answer) VALUES (:r,:a)");
         let mut conn = pool.get_conn().unwrap();
         conn.prep_exec(query,params!{
                 "r" => resultId.to_owned(),
@@ -105,7 +104,6 @@ fn add_result(_request: &mut Request) -> IronResult<Response> {
     let tags: Vec<Tag> = result.tags;
     for tag in tags.to_owned() {
         let query: String = format!("Insert into ResultTags (resultId, tag,weight,isNegative,amount) VALUES (:r,:t,:w,:i,:a)"); 
-        let mut distros: Vec<Distro> = Vec::new();
         let mut conn = pool.get_conn().unwrap();
         conn.prep_exec(query,params!{
                 "r" => resultId.to_owned(),
@@ -116,6 +114,49 @@ fn add_result(_request: &mut Request) -> IronResult<Response> {
         }).unwrap();
     }
     Ok(get_response(format!("{:?}",resultId)))
+}
+
+fn get_result(_request: &mut Request) -> IronResult<Response> {  
+    let pool: Pool = connect_database();
+
+    let resultId: String = String::from(_request.extensions.get::<Router>().unwrap().find("id").unwrap_or("0"));
+    let mut result: Result = Result{
+        answers: Vec::new(),
+        tags: Vec::new()
+    };
+
+    let mut conn = pool.get_conn().unwrap();
+    let answerResults = conn.prep_exec("Select answer as id from ResultAnswers where resultId = :r",params!{
+                "r" => resultId.to_owned(),
+    }).unwrap();
+    for row in answerResults {
+        let mut r = row.unwrap();
+        let answer: i32 = r.take("id").unwrap();
+        result.answers.push(answer)
+    }
+    result.tags = get_tags_of_result(resultId,&pool);
+    
+    let response: String = serde_json::to_string_pretty(&result).unwrap();
+    Ok(get_response(response))
+}
+
+fn get_tags_of_result(id: String, pool: &Pool) -> Vec<Tag>{
+    let mut tags: Vec<Tag> = Vec::new();
+    let mut conn = pool.get_conn().unwrap();
+    let tagResults = conn.prep_exec("Select * from ResultTags where resultId = :r",params!{
+                "r" => id.to_owned(),
+    }).unwrap();
+    for row in tagResults {
+        let mut r = row.unwrap();
+        let tag: Tag = Tag{
+            name: r.take("tag").unwrap(),
+            weight: r.take("weight").unwrap(),
+            amount: r.take("amount").unwrap(),
+            negative: r.take("isNegative").unwrap(),
+        };
+        tags.push(tag);
+    }
+    return tags;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -145,15 +186,15 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
     let tm = time::now();
     let visitDate = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
     
-    let query: String = format!("Insert into Visitor (visitDate, userAgent,hasDNT, hasAdblocker, referrer) VALUES (:date,:ua,:dnt,:adblocker,:ref)"); 
-    let mut distros: Vec<Distro> = Vec::new();
+    let query: String = format!("Insert into Visitor (visitDate, userAgent,hasDNT, hasAdblocker, referrer, lang) VALUES (:date,:ua,:dnt,:adblocker,:ref,:l)"); 
     let mut conn = pool.get_conn().unwrap();
-    let result = conn.prep_exec(query,params!{
+    conn.prep_exec(query,params!{
             "date" => visitDate.to_owned(),
             "ua" => userAgent.to_owned(),
             "dnt" => hasDNT,
             "adblocker" => hasAdblocker,
-            "ref" => referrer.to_owned()
+            "ref" => referrer.to_owned(),
+            "l" => lang.to_owned()
     }).unwrap();
 
     let max_id: String = format!("Select max(id) as id from Visitor");

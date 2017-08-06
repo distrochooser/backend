@@ -322,7 +322,7 @@ pub struct Answer{
 * Query database structs
 */
 fn query_questions(pool: &Pool, lang: &String) -> Vec<Question>{
-    let query: String = format!("Select * from Question"); 
+    let query: String = format!("Select * from Question order by orderIndex"); 
     let mut questions: Vec<Question> = Vec::new();
     let mut conn = pool.get_conn().unwrap();
     let result = conn.prep_exec(query,()).unwrap();

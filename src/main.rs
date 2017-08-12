@@ -397,7 +397,6 @@ fn connect_database() -> Pool{
         let mut f = File::open(arg1).unwrap(); 
         let mut data = String::new();
         f.read_to_string(&mut data);
-        print!("{:?}",data);
         let pool = Pool::new(data.as_str()).unwrap();
         let mut conn = pool.get_conn().unwrap();
         conn.prep_exec("SET NAMES UTF8;",()).unwrap();

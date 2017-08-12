@@ -13,6 +13,7 @@ extern crate serde_derive;
 extern crate mysql;
 extern crate time;
 extern crate bodyparser;
+extern crate base64;
 
 use router::Router;
 use iron::Iron;
@@ -27,6 +28,7 @@ use std::env;
 use std::str::FromStr;
 use iron::Plugin;
 use std::collections::HashMap;
+use base64::{encode, decode};
 
 
 
@@ -37,7 +39,7 @@ fn main(){
     router.get("/distributions/:lang/", get_distributions, "get_all_distros"); 
     router.get("/distributions/:lang/:id/", get_distribution, "get_one_distros"); 
     router.get("/questions/:lang/", get_questions, "get_all_questions"); 
-    router.get("/get/:lang/:adblocker/:dnt/",new_visitor, "get_new_visitor");
+    router.post("/get/:lang/",new_visitor, "get_new_visitor");
     router.post("/addresult/:lang/:rating/:visitor/",add_result,"add_new_result");
     router.get("/getresult/:id/",get_result, "get_old_result");
     Iron::new(router).http("127.0.0.1:8181").unwrap();
@@ -47,6 +49,12 @@ fn main(){
 */
 fn get_index(_request: &mut Request) -> IronResult<Response> {    
     Ok(get_response(String::from("I'm an rusty API.")))
+}
+
+#[derive(Debug, Clone, Deserialize,Serialize)]
+struct NewVisitor {
+    pub useragent: String,
+    pub referrer: String
 }
 
 #[derive(Debug, Clone, Deserialize,Serialize)]
@@ -162,8 +170,6 @@ fn get_tags_of_result(id: String, pool: &Pool) -> Vec<Tag>{
 pub struct Visitor{
     pub id: i32,
     pub userAgent: String,
-    pub hasDNT: bool,
-    pub hasAdblocker: bool,
     pub visitDate: String,
     pub referrer: String,
     pub questions: Vec<Question>,
@@ -173,29 +179,18 @@ pub struct Visitor{
 fn new_visitor(_request: &mut Request) -> IronResult<Response> { 
     let pool: Pool = connect_database();
     let lang: String = get_lang(&pool,_request);
-    let hasAdblockerRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("adblocker").unwrap_or(""));
-    let hasDNTRaw: String = String::from(_request.extensions.get::<Router>().unwrap().find("dnt").unwrap_or(""));
-    let hasAdblocker = if (hasAdblockerRaw == "1" ) { true } else { false };
-    let hasDNT = if (hasDNTRaw == "1" ) { true } else { false };
-    let mut userAgent: String = String::new();
-    if( _request.headers.has::<iron::headers::UserAgent>() ) {
-        userAgent = String::from_str(_request.headers.get::<iron::headers::UserAgent>().unwrap().as_str()).unwrap();
-    }
-    let mut referrer: String = String::new();
-    if( _request.headers.has::<iron::headers::Referer>() ) {
-        referrer = String::from_str(_request.headers.get::<iron::headers::Referer>().unwrap().as_str()).unwrap();
-    }
+
+    let rawResult = _request.get_ref::<bodyparser::Struct<NewVisitor>>();
+    let visitor: NewVisitor = rawResult.unwrap().to_owned().unwrap();
+
     let tm = time::now();
     let visitDate = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
-    
-    let query: String = format!("Insert into Visitor (visitDate, userAgent,hasDNT, hasAdblocker, referrer, lang) VALUES (:date,:ua,:dnt,:adblocker,:ref,:l)"); 
+    let query: String = format!("Insert into Visitor (visitDate, userAgent, referrer, lang) VALUES (:date,:ua,:ref,:l)"); 
     let mut conn = pool.get_conn().unwrap();
     conn.prep_exec(query,params!{
             "date" => visitDate.to_owned(),
-            "ua" => userAgent.to_owned(),
-            "dnt" => hasDNT,
-            "adblocker" => hasAdblocker,
-            "ref" => referrer.to_owned(),
+            "ua" => visitor.useragent.to_owned(),
+            "ref" => visitor.referrer.to_owned(),
             "l" => lang.to_owned()
     }).unwrap();
 
@@ -211,11 +206,9 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
 
     let v = Visitor{
         id: id,
-        userAgent: userAgent,
-        hasDNT: hasDNT,
-        hasAdblocker: hasAdblocker,
+        userAgent: visitor.useragent.to_owned(),
         visitDate: visitDate,
-        referrer: referrer,
+        referrer: visitor.referrer.to_owned(),
         questions: query_questions(&pool, &lang),
         distros: query_distributions(&pool, &lang),
         i18n: get_all_translations(&pool, &lang)

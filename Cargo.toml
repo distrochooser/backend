@@ -1,6 +1,6 @@
 [package]
 name = "rusty_distrochooser"
-version = "3.0.0"
+version = "4.0.0"
 authors = [ "Christoph Müller <me@0fury.de>" ]
 
 [dependencies.iron]
@@ -17,3 +17,4 @@ time = "*"
 serde = "*"
 serde_json = "*"
 serde_derive = "*"
+iron_compress = "*"

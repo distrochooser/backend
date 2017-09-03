@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(unused_must_use)]
 #![allow(unused_parens)]
+#![allow(non_camel_case_types)]
 
 extern crate router;
 extern crate iron;
@@ -13,7 +14,8 @@ extern crate serde_derive;
 extern crate mysql;
 extern crate time;
 extern crate bodyparser;
-extern crate base64;
+extern crate iron_compress;
+
 
 use router::Router;
 use iron::Iron;
@@ -25,11 +27,9 @@ use mysql::Pool;
 use std::fs::File;
 use std::io::prelude::*;
 use std::env;
-use std::str::FromStr;
 use iron::Plugin;
 use std::collections::HashMap;
-use base64::{encode, decode};
-
+use iron_compress::GzipWriter;
 
 
 fn main(){
@@ -54,7 +54,8 @@ fn get_index(_request: &mut Request) -> IronResult<Response> {
 #[derive(Debug, Clone, Deserialize,Serialize)]
 struct NewVisitor {
     pub useragent: String,
-    pub referrer: String
+    pub referrer: String,
+    pub prerender: bool
 }
 
 #[derive(Debug, Clone, Deserialize,Serialize)]
@@ -143,7 +144,7 @@ fn get_result(_request: &mut Request) -> IronResult<Response> {
     }
     result.tags = get_tags_of_result(resultId,&pool);
     
-    let response: String = serde_json::to_string_pretty(&result).unwrap();
+    let response: String = serde_json::to_string(&result).unwrap();
     Ok(get_response(response))
 }
 
@@ -185,13 +186,14 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
 
     let tm = time::now();
     let visitDate = format!("{}",tm.strftime("%Y-%m-%d %H:%M:%S").unwrap());
-    let query: String = format!("Insert into Visitor (visitDate, userAgent, referrer, lang) VALUES (:date,:ua,:ref,:l)"); 
+    let query: String = format!("Insert into Visitor (visitDate, userAgent, referrer, lang, prerender) VALUES (:date,:ua,:ref,:l,:p)"); 
     let mut conn = pool.get_conn().unwrap();
     conn.prep_exec(query,params!{
             "date" => visitDate.to_owned(),
             "ua" => visitor.useragent.to_owned(),
             "ref" => visitor.referrer.to_owned(),
-            "l" => lang.to_owned()
+            "l" => lang.to_owned(),
+            "p" => visitor.prerender.to_owned()
     }).unwrap();
 
     let max_id: String = format!("Select max(id) as id from Visitor");
@@ -213,7 +215,7 @@ fn new_visitor(_request: &mut Request) -> IronResult<Response> {
         distros: query_distributions(&pool, &lang),
         i18n: get_all_translations(&pool, &lang)
     };
-    let response: String = serde_json::to_string_pretty(&v).unwrap();
+    let response: String = serde_json::to_string(&v).unwrap();
     Ok(get_response(response))
 }
 
@@ -266,7 +268,7 @@ fn get_distributions(_request: &mut Request) -> IronResult<Response> {
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
     let distros: Vec<Distro> = query_distributions(&pool,&lang);
-    let response: String = serde_json::to_string_pretty(&distros).unwrap();
+    let response: String = serde_json::to_string(&distros).unwrap();
     Ok(get_response(response))
 }
 /**
@@ -281,7 +283,7 @@ fn get_distribution(_request: &mut Request) -> IronResult<Response> {
     let mut response: Response = get_not_found_response();
     for distro in distros {
         if (distro.id == id) {
-            let body: String = serde_json::to_string_pretty(&distro).unwrap();
+            let body: String = serde_json::to_string(&distro).unwrap();
             response = get_response(body);
         }
     }
@@ -377,7 +379,7 @@ fn get_questions(_request: &mut Request) -> IronResult<Response> {
     let pool: Pool = connect_database();
     let lang = get_lang(&pool,_request);
     let questions: Vec<Question> = query_questions(&pool,&lang);
-    let response: String = serde_json::to_string_pretty(&questions).unwrap();
+    let response: String = serde_json::to_string(&questions).unwrap();
     Ok(get_response(response))
 }
 
@@ -464,7 +466,8 @@ fn get_all_translations(pool: &Pool, lang: &String) -> HashMap<String,i18n>{
 }
 
 fn get_response(body: String) -> Response{
-    let mut resp = Response::with((status::Ok, body.to_owned()));
+    let c_body = GzipWriter(&body.as_bytes());
+    let mut resp = Response::with((status::Ok, c_body));
     set_cors(&mut resp);
     return resp;
 }
@@ -483,4 +486,8 @@ fn set_cors(resp: &mut Response) {
     resp.headers.set_raw("Access-Control-Allow-Origin",vec![b"*".to_vec()]);
     resp.headers.set_raw("Access-Control-Allow-Method",vec![b"GET, OPTIONS, POST".to_vec()]);
     resp.headers.set_raw("Access-Control-Allow-Headers",vec![b"Content-Type".to_vec()]);
+    resp.headers.set_raw("Cache-Control",vec![b"must-revalidate".to_vec()]);
+    resp.headers.set_raw("Pragma",vec![b"no-cache".to_vec()]);
+    resp.headers.set_raw("Expires",vec![b"Sat, 26 Jul 1997 05:00:00 GMT".to_vec()]);
+    resp.headers.set_raw("Cache-Control",vec![b"Sat, max-age=259200".to_vec()]);
 }

@@ -42,6 +42,7 @@ fn main(){
     router.post("/get/:lang/",new_visitor, "get_new_visitor");
     router.post("/addresult/:lang/:rating/:visitor/",add_result,"add_new_result");
     router.get("/getresult/:id/",get_result, "get_old_result");
+    router.get("/addrating/:id/:rating",add_rating, "add_rating");
     Iron::new(router).http("127.0.0.1:8181").unwrap();
 }
 /**
@@ -69,6 +70,26 @@ struct Tag {
     pub weight: i32,
     pub amount: i32,
     pub negative: bool
+}
+
+fn add_rating(_request: &mut Request) -> IronResult<Response> {  
+    let pool: Pool = connect_database();
+    let test: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("id").unwrap_or("0")).parse().unwrap();
+    let rating: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("rating").unwrap_or("0")).parse().unwrap();
+    
+    let query: String = format!("Update Result set rating=:r where id=:t"); 
+    let mut conn = pool.get_conn().unwrap();
+    let result = conn.prep_exec(query,params!{
+            "r" => rating.to_owned(),
+            "t" => test.to_owned()
+    }).unwrap();
+
+    let count: u64 = result.affected_rows();
+    if  (count == 1) {
+        Ok(get_response(format!("{:?}",count)))
+    } else {
+        Ok(get_failed_response(format!("{:?}",count)))
+    }
 }
 
 fn add_result(_request: &mut Request) -> IronResult<Response> {  
@@ -166,6 +187,7 @@ fn get_tags_of_result(id: String, pool: &Pool) -> Vec<Tag>{
     }
     return tags;
 }
+
 
 #[derive(Serialize, Deserialize)]
 pub struct Visitor{
@@ -468,18 +490,24 @@ fn get_all_translations(pool: &Pool, lang: &String) -> HashMap<String,i18n>{
 fn get_response(body: String) -> Response{
     let c_body = GzipWriter(&body.as_bytes());
     let mut resp = Response::with((status::Ok, c_body));
-    set_cors(&mut resp);
+    set_headers(&mut resp);
     return resp;
 }
 fn get_not_found_response() -> Response{
     let mut resp = Response::with((status::NotFound));
-    set_cors(&mut resp);
+    set_headers(&mut resp);
+    return resp;
+}
+fn get_failed_response(body: String) -> Response{
+    let c_body = GzipWriter(&body.as_bytes());
+    let mut resp = Response::with((status::NotAcceptable, c_body));
+    set_headers(&mut resp);
     return resp;
 }
 fn options(_request: &mut Request) -> IronResult<Response> {    
     Ok(get_response(String::from("Options :)")))
 }
-fn set_cors(resp: &mut Response) {   
+fn set_headers(resp: &mut Response) {   
     let server: String =  String::from("Distrochooser 4");
     resp.headers.set_raw("content-type", vec![b"application/json;charset=utf-8".to_vec()]);
     resp.headers.set_raw("server", vec![server.into_bytes()]);

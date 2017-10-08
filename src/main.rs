@@ -77,7 +77,7 @@ fn add_rating(_request: &mut Request) -> IronResult<Response> {
     let test: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("id").unwrap_or("0")).parse().unwrap();
     let rating: i32 = String::from(_request.extensions.get::<Router>().unwrap().find("rating").unwrap_or("0")).parse().unwrap();
     
-    let query: String = format!("Update Result set rating=:r where id=:t"); 
+    let query: String = format!("Update Result set rating=:r, updated=1 where id=:t and updated=0"); 
     let mut conn = pool.get_conn().unwrap();
     let result = conn.prep_exec(query,params!{
             "r" => rating.to_owned(),
@@ -85,11 +85,7 @@ fn add_rating(_request: &mut Request) -> IronResult<Response> {
     }).unwrap();
 
     let count: u64 = result.affected_rows();
-    if  (count == 1) {
-        Ok(get_response(format!("{:?}",count)))
-    } else {
-        Ok(get_failed_response(format!("{:?}",count)))
-    }
+    Ok(get_response(format!("{:?}",count)))
 }
 
 fn add_result(_request: &mut Request) -> IronResult<Response> {  
@@ -495,12 +491,6 @@ fn get_response(body: String) -> Response{
 }
 fn get_not_found_response() -> Response{
     let mut resp = Response::with((status::NotFound));
-    set_headers(&mut resp);
-    return resp;
-}
-fn get_failed_response(body: String) -> Response{
-    let c_body = GzipWriter(&body.as_bytes());
-    let mut resp = Response::with((status::NotAcceptable, c_body));
     set_headers(&mut resp);
     return resp;
 }
